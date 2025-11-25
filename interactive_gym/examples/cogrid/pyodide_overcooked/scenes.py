@@ -15,6 +15,7 @@ from interactive_gym.examples.cogrid import (
 from interactive_gym.scenes import gym_scene
 from interactive_gym.scenes import static_scene
 from interactive_gym.scenes import scene
+from interactive_gym.scenes.AI_speed_specification import get_random_frame_skip
 
 
 # Constants for controls/actions/etc.
@@ -117,6 +118,7 @@ tutorial_gym_scene = (
         policy_mapping={
             0: configuration_constants.PolicyTypes.Human,
         },
+        frame_skip=int(get_random_frame_skip()),
     )
     .rendering(
         fps=30,
@@ -162,7 +164,7 @@ tutorial_gym_scene = (
 cramped_room_sp_0 = (
     gym_scene.GymScene()
     .scene(scene_id="cramped_room_sp_0", experiment_config={})
-    .policies(policy_mapping=SP_POLICY_MAPPING_CRAMPED_ROOM, frame_skip=5)
+    .policies(policy_mapping=SP_POLICY_MAPPING_CRAMPED_ROOM, frame_skip=int(get_random_frame_skip()))
     .rendering(
         fps=30,
         env_to_state_fn=overcooked_utils.overcooked_env_to_render_fn,
