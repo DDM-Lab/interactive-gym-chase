@@ -49,7 +49,7 @@ if __name__ == "__main__":
     experiment_config = (
         experiment_config.ExperimentConfig()
         .experiment(stager=stager, experiment_id="overcooked_test")
-        .hosting(port=5702, host="0.0.0.0")
+        .hosting(port=args.port, host="0.0.0.0")
     )
 
     app.run(experiment_config)
