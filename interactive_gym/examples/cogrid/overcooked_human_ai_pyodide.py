@@ -42,7 +42,7 @@ stager = stager.Stager(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--port", type=int, default=5702, help="Port number to listen on"
+        "--port", type=int, default=5703, help="Port number to listen on"
     )
     args = parser.parse_args()
 
