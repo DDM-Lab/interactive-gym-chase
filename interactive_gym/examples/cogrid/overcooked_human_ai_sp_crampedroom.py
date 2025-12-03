@@ -68,7 +68,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port", type=int, default=5703, help="Port number to listen on"
     )
+    parser.add_argument(
+        "--debug", type=bool, default=False, help="Enable debug mode to print episode information"
+    )
     args = parser.parse_args()
+
+    # Store debug flag in the experiment config so it can be accessed by the scene
+    import interactive_gym.server.app as app_module
+    app_module.DEBUG_MODE = args.debug
 
     experiment_config = (
         experiment_config.ExperimentConfig()

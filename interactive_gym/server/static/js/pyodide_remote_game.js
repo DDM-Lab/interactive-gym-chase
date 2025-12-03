@@ -177,10 +177,18 @@ obs, rewards, terminateds, truncateds, infos, render_state
         if (all_terminated || all_truncated) {
             this.num_episodes += 1;
 
+            // Debug logging if enabled
+            if (window.DEBUG_MODE) {
+                console.log(`[DEBUG] Episode ${this.num_episodes} finished`);
+            }
+
             if (this.num_episodes >= this.max_episodes) {
                 this.state = "done";
             } else {
                 this.shouldReset = true;
+                if (window.DEBUG_MODE) {
+                    console.log(`[DEBUG] Starting episode ${this.num_episodes + 1}`);
+                }
             }
             
         }

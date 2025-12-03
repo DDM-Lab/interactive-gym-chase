@@ -72,7 +72,13 @@ class Scene:
         self.status = SceneStatus.Active
         self.sio = sio
         self.room = room
-        self.sio.emit("activate_scene", {**self.scene_metadata}, room=room)
+        
+        # Import the debug mode from app.py
+        from interactive_gym.server import app as app_module
+        metadata = {**self.scene_metadata}
+        metadata['debug_mode'] = getattr(app_module, 'DEBUG_MODE', False)
+        
+        self.sio.emit("activate_scene", metadata, room=room)
 
     def deactivate(self):
         """

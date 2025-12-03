@@ -52,6 +52,9 @@ logger = setup_logger(__name__, "./iglog.log", level=logging.DEBUG)
 
 CONFIG = remote_config.RemoteConfig()
 
+# Debug mode flag
+DEBUG_MODE = False
+
 
 # Generic stager is the "base" Stager that we'll build for each
 # participant that connects to the server. This is the base instance
@@ -493,9 +496,12 @@ def data_emission(data):
 @socketio.on("emit_remote_game_data")
 def receive_remote_game_data(data):
     subject_id = get_subject_id_from_session_id(flask.request.sid)
+    logger.info(f"Received game data for subject {subject_id} in scene {data['scene_id']}")
 
     # Decode the msgpack data
     decoded_data = msgpack.unpackb(data["data"])
+    logger.info(f"Decoded data keys: {list(decoded_data.keys())}")
+    logger.info(f"Data size - actions: {len(decoded_data.get('actions', {}))}, observations: {len(decoded_data.get('observations', {}))}")
 
     # Flatten any nested dictionaries
     flattened_data = flatten_dict.flatten(decoded_data, reducer="dot")

@@ -414,6 +414,14 @@ socket.on("activate_scene", function(data) {
         data.globals = data.globals || {};
         Object.assign(data.globals, interactiveGymGlobals);
     }
+    
+    // Set DEBUG_MODE from the scene data
+    if (data.debug_mode !== undefined) {
+        window.DEBUG_MODE = data.debug_mode;
+    } else {
+        window.DEBUG_MODE = false;
+    }
+    
     activateScene(data);
 });
 
