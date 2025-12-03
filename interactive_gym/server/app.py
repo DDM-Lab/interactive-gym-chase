@@ -101,13 +101,15 @@ app.config["SECRET_KEY"] = "secret!"
 app.config["DEBUG"] = os.getenv("FLASK_ENV", "production") == "development"
 
 # check if redis is available to use for message queue
-redis_host = "127.0.0.1"
-try:
-    redis.Redis(redis_host, socket_connect_timeout=1).ping()
-    message_queue = f"redis://{redis_host}:6379/0"
-except (redis.exceptions.ConnectionError, TimeoutError):
-    print("Redis is not available for message queue. Proceeding without it...")
-    message_queue = None
+# redis_host = "127.0.0.1"
+# try:
+#     redis.Redis(redis_host, socket_connect_timeout=2, socket_keepalive=False).ping()
+#     message_queue = f"redis://{redis_host}:6379/0"
+# except (redis.exceptions.ConnectionError, TimeoutError, Exception):
+#     print("Redis is not available for message queue. Proceeding without it...")
+#     message_queue = None
+
+message_queue = None
 
 socketio = flask_socketio.SocketIO(
     app,
@@ -529,23 +531,19 @@ def receive_remote_game_data(data):
         json.dump(data["interactiveGymGlobals"], f)
 
     # Also get the current scene for this participant and save the metadata
-    # TODO(chase): this has issues where the data may not be received before the
-    # scene is advanced, which results in this getting the metadata for the _next_
-    # scene.
+    participant_stager = STAGERS.get(subject_id, None)
+    if participant_stager is None:
+        logger.error(
+            f"Subject {subject_id} tried to save data but they don't have a Stager."
+        )
+        return
 
-    # participant_stager = STAGERS.get(subject_id, None)
-    # if participant_stager is None:
-    #     logger.error(
-    #         f"Subject {subject_id} tried to save data but they don't have a Stager."
-    #     )
-    #     return
+    current_scene = participant_stager.current_scene
+    current_scene_metadata = current_scene.get_complete_scene_metadata()
 
-    # current_scene = participant_stager.current_scene
-    # current_scene_metadata = current_scene.get_complete_scene_metadata()
-
-    # # save the metadata to a json file
-    # with open(f"data/{data['scene_id']}/{subject_id}_metadata.json", "w") as f:
-    #     json.dump(current_scene_metadata, f)
+    # save the metadata to a json file
+    with open(f"data/{data['scene_id']}/{subject_id}_metadata.json", "w") as f:
+        json.dump(current_scene_metadata, f, indent=2)
 
 
 # def periodic_log() -> None:
