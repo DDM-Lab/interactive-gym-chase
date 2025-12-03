@@ -163,7 +163,7 @@ tutorial_gym_scene = (
 
 cramped_room_sp_0 = (
     gym_scene.GymScene()
-    .scene(scene_id="cramped_room_sp_0", experiment_config={})
+    .scene(scene_id="cramped_room_sp_0", experiment_config={}, should_export_metadata=True)
     .policies(policy_mapping=SP_POLICY_MAPPING_CRAMPED_ROOM, frame_skip=int(get_random_frame_skip()))
     .rendering(
         fps=30,
