@@ -20,15 +20,12 @@ from interactive_gym.examples.cogrid import (
 from interactive_gym.configurations import experiment_config
 
 
-NUM_EPISODES = 20
-
-cramped_room_sp_20_ep = (
+cramped_room_sp_0 = (
     copy.deepcopy(oc_scenes.cramped_room_sp_0)
-    .gameplay(num_episodes=NUM_EPISODES)
     .user_experience(
         scene_header="Overcooked",
         scene_body="<center><p>"
-        f"You'll now play with a partner for a {NUM_EPISODES} rounds. "
+        f"You'll now play with a partner for 20 rounds. "
         "<br><br> "
         "You will be playing on the layout pictured below. "
         '<center><img src="static/assets/overcooked/cramped_room.png" alt="Annotated Overcooked environment." height="270" width="315"></center>'
@@ -50,13 +47,40 @@ cramped_room_sp_20_ep = (
     )
 )
 
-
+cramped_room_sp_1 = (
+    copy.deepcopy(cramped_room_sp_0)
+    .user_experience(
+        scene_header="Overcooked",
+        scene_body="<center><p>"
+        "You'll now play another round on the same layout. "
+        "</p></center>",
+    )
+)
 
 stager = stager.Stager(
     scenes=[
         oc_scenes.start_scene,
         oc_scenes.tutorial_gym_scene,
-        cramped_room_sp_20_ep,
+        cramped_room_sp_0,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
+        cramped_room_sp_1,
         oc_scenes.feedback_scene,
         oc_scenes.end_scene,
     ]
