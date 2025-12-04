@@ -20,17 +20,20 @@ from interactive_gym.examples.cogrid import (
 from interactive_gym.configurations import experiment_config
 
 
-cramped_room_sp_0 = (
-    copy.deepcopy(oc_scenes.cramped_room_sp_0)
-    .user_experience(
+def create_cramped_room_episode(episode_num: int) -> scene.Scene:
+    """Create a cramped room scene with the given episode number."""
+    base_scene = copy.deepcopy(oc_scenes.cramped_room_sp_0)
+    
+    if episode_num == 0:
+        # First episode
+        scene_body = "<center><p>" + "You'll now play with a partner for 20 rounds. " + "<br><br> " + "You will be playing on the layout pictured below. " + '<center><img src="static/assets/overcooked/cramped_room.png" alt="Annotated Overcooked environment." height="270" width="315"></center>' + "When the button activates, click it to begin. " + "</p></center>"
+    else:
+        # Subsequent episodes
+        scene_body = "<center><p>" + "You'll now play another round on the same layout. " + "</p></center>"
+    
+    scene_obj = base_scene.user_experience(
         scene_header="Overcooked",
-        scene_body="<center><p>"
-        f"You'll now play with a partner for 20 rounds. "
-        "<br><br> "
-        "You will be playing on the layout pictured below. "
-        '<center><img src="static/assets/overcooked/cramped_room.png" alt="Annotated Overcooked environment." height="270" width="315"></center>'
-        "When the button activates, click it to begin. "
-        "</p></center>",
+        scene_body=scene_body,
         game_page_html_fn=overcooked_utils.overcooked_game_page_header_fn,
         in_game_scene_body="""
         <center>
@@ -45,42 +48,17 @@ cramped_room_sp_0 = (
         <br><br>
         """,
     )
-)
-
-cramped_room_sp_1 = (
-    copy.deepcopy(cramped_room_sp_0)
-    .user_experience(
-        scene_header="Overcooked",
-        scene_body="<center><p>"
-        "You'll now play another round on the same layout. "
-        "</p></center>",
-    )
-)
+    
+    # Store the episode number in the scene object
+    scene_obj.episode_num = episode_num
+    
+    return scene_obj
 
 stager = stager.Stager(
     scenes=[
         oc_scenes.start_scene,
         oc_scenes.tutorial_gym_scene,
-        cramped_room_sp_0,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
-        cramped_room_sp_1,
+        *[create_cramped_room_episode(episode_num) for episode_num in range(20)],
         oc_scenes.feedback_scene,
         oc_scenes.end_scene,
     ]

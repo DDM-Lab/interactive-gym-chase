@@ -462,7 +462,7 @@ def on_exit():
 def data_emission(data):
     """Save the static scene data to a csv file."""
     subject_id = get_subject_id_from_session_id(flask.request.sid)
-    # Save to a csv in data/{scene_id}/{subject_id}.csv
+    # Save to a csv in data/{scene_id}/{subject_id}_{episode_num}.csv
     # Save the static scene data to a csv file.
     scene_id = data.get("scene_id")
     if not scene_id:
@@ -472,7 +472,6 @@ def data_emission(data):
     # Create a directory for the CSV files if it doesn't exist
     os.makedirs(f"data/{scene_id}/", exist_ok=True)
 
-    # Generate a unique filename
     filename = f"data/{scene_id}/{subject_id}.csv"
     globals_filename = f"data/{scene_id}/{subject_id}_globals.json"
 
@@ -526,9 +525,20 @@ def receive_remote_game_data(data):
     # Create a directory for the CSV files if it doesn't exist
     os.makedirs(f"data/{data['scene_id']}/", exist_ok=True)
 
-    # Generate a unique filename
-    filename = f"data/{data['scene_id']}/{subject_id}.csv"
-    globals_filename = f"data/{data['scene_id']}/{subject_id}_globals.json"
+    # Get the current scene to retrieve the episode number
+    participant_stager = STAGERS.get(subject_id, None)
+    episode_num = None
+    if participant_stager is not None:
+        current_scene = participant_stager.current_scene
+        episode_num = getattr(current_scene, 'episode_num', None)
+
+    # Generate a unique filename with episode number if available
+    if episode_num is not None:
+        filename = f"data/{data['scene_id']}/{subject_id}_{episode_num}.csv"
+        globals_filename = f"data/{data['scene_id']}/{subject_id}_{episode_num}_globals.json"
+    else:
+        filename = f"data/{data['scene_id']}/{subject_id}.csv"
+        globals_filename = f"data/{data['scene_id']}/{subject_id}_globals.json"
 
     # Save as CSV
     logger.info(f"Saving {filename}")
@@ -537,7 +547,6 @@ def receive_remote_game_data(data):
         json.dump(data["interactiveGymGlobals"], f)
 
     # Also get the current scene for this participant and save the metadata
-    participant_stager = STAGERS.get(subject_id, None)
     if participant_stager is None:
         logger.error(
             f"Subject {subject_id} tried to save data but they don't have a Stager."
@@ -547,8 +556,12 @@ def receive_remote_game_data(data):
     current_scene = participant_stager.current_scene
     current_scene_metadata = current_scene.get_complete_scene_metadata()
 
-    # save the metadata to a json file
-    with open(f"data/{data['scene_id']}/{subject_id}_metadata.json", "w") as f:
+    # save the metadata to a json file with episode number if available
+    if episode_num is not None:
+        metadata_filename = f"data/{data['scene_id']}/{subject_id}_{episode_num}_metadata.json"
+    else:
+        metadata_filename = f"data/{data['scene_id']}/{subject_id}_metadata.json"
+    with open(metadata_filename, "w") as f:
         json.dump(current_scene_metadata, f, indent=2)
 
 
