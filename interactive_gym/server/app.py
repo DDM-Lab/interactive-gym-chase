@@ -531,6 +531,9 @@ def receive_remote_game_data(data):
     if participant_stager is not None:
         current_scene = participant_stager.current_scene
         episode_num = getattr(current_scene, 'episode_num', None)
+    
+    # Add episode_num column to dataframe
+    df['episode_num'] = episode_num
 
     # Generate a unique filename with episode number if available
     if episode_num is not None:
