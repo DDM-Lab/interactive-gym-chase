@@ -9,6 +9,7 @@ import copy
 
 from interactive_gym.server import app
 from interactive_gym.scenes import scene
+from interactive_gym.scenes import static_scene
 from interactive_gym.scenes import stager
 from interactive_gym.examples.cogrid.pyodide_overcooked import (
     scenes as oc_scenes,
@@ -19,6 +20,22 @@ from interactive_gym.examples.cogrid import (
 
 from interactive_gym.configurations import experiment_config
 
+end_survey_scene = (
+    static_scene.ScalesAndTextBox(
+        pre_scale_header="Please answer the following questions about your experience:",
+        scale_questions=[
+            "On a scale from 1-7, with 1 being detrimental and 7 being beneficial to your success, how effective was your partner as a teammate?",
+            "On a scale from 1-7, with 1 being not at all and 7 being very much, rate how much you enjoyed playing the game with your partner.",
+            "On a scale of 1-7, rate how much you think that your partner contributed to the success of your team. With 1 meaning they made your team worse off and 7 being that they made a very positive contribution.",
+            "On a scale of 1-7, rate how much you think that you contributed to the success of your team. With 1 meaning you made your team worse off and 7 being you made a very positive contribution.",
+            "On a scale from 1 to 7, where 1 is definitely a bot, 4 is unsure, and 7 is definitely a human, indicate how likely you think that your partner is a human or a bot build to play this game?",
+        ],
+        scale_labels=["1", "2", "3", "4", "5", "6", "7"],
+        text_box_header="Please provide any additional feedback you would like to share.",
+    )
+    .scene(scene_id="cramped_room_options_scene_0", experiment_config={})
+    .display(scene_subheader="Partner Feedback")
+)
 
 def create_cramped_room_episode(episode_num: int) -> scene.Scene:
     """Create a cramped room scene with the given episode number."""
@@ -59,7 +76,7 @@ stager = stager.Stager(
         oc_scenes.start_scene,
         oc_scenes.tutorial_gym_scene,
         *[create_cramped_room_episode(episode_num) for episode_num in range(20)],
-        oc_scenes.feedback_scene,
+        end_survey_scene,
         oc_scenes.end_scene,
     ]
 )
