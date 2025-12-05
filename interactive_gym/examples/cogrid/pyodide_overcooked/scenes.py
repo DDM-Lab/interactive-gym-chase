@@ -91,6 +91,8 @@ action_mapping = {
     "Q": Toggle,
 }
 
+# Initialize frame_skip once
+frame_skip = int(get_random_frame_skip())
 
 # Define the start scene, which is the landing page for participants.
 start_scene = (
@@ -118,7 +120,7 @@ tutorial_gym_scene = (
         policy_mapping={
             0: configuration_constants.PolicyTypes.Human,
         },
-        frame_skip=int(get_random_frame_skip()),
+        frame_skip=frame_skip,
     )
     .rendering(
         fps=30,
@@ -164,7 +166,7 @@ tutorial_gym_scene = (
 cramped_room_sp_0 = (
     gym_scene.GymScene()
     .scene(scene_id="cramped_room_sp_0", experiment_config={}, should_export_metadata=True)
-    .policies(policy_mapping=SP_POLICY_MAPPING_CRAMPED_ROOM, frame_skip=int(get_random_frame_skip()))
+    .policies(policy_mapping=SP_POLICY_MAPPING_CRAMPED_ROOM, frame_skip=frame_skip)
     .rendering(
         fps=30,
         env_to_state_fn=overcooked_utils.overcooked_env_to_render_fn,

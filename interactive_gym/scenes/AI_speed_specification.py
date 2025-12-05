@@ -22,5 +22,11 @@ def get_random_frame_skip():
     # Randomly select a key
     random_key = random.choice(list(agent_speeds.keys()))
     
+    # Get the second value (index 1) from the tuple
+    frame_skip_value = agent_speeds[random_key][1]
+    
+    # Log the value for debugging
+    # print(f"[get_random_frame_skip] Selected key: {random_key}, Raw value: {frame_skip_value}, int() value: {int(frame_skip_value)}")
+    
     # Return the second value (index 1) from the tuple
-    return agent_speeds[random_key][1]
+    return frame_skip_value
