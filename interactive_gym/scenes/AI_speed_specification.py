@@ -13,7 +13,7 @@ def get_random_frame_skip():
     """
     # Get the directory where this file is located
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    json_path = os.path.join(current_dir, "agent_0_mean_speeds.json")
+    json_path = os.path.join(current_dir, "subject_mean_speeds.json")
     
     # Load the JSON file
     with open(json_path, "r") as f:
