@@ -104,15 +104,15 @@ app.config["SECRET_KEY"] = "secret!"
 app.config["DEBUG"] = os.getenv("FLASK_ENV", "production") == "development"
 
 # check if redis is available to use for message queue
-# redis_host = "127.0.0.1"
-# try:
-#     redis.Redis(redis_host, socket_connect_timeout=2, socket_keepalive=False).ping()
-#     message_queue = f"redis://{redis_host}:6379/0"
-# except (redis.exceptions.ConnectionError, TimeoutError, Exception):
-#     print("Redis is not available for message queue. Proceeding without it...")
-#     message_queue = None
+redis_host = "127.0.0.1"
+try:
+    redis.Redis(redis_host, socket_connect_timeout=2, socket_keepalive=False).ping()
+    message_queue = f"redis://{redis_host}:6379/0"
+except (redis.exceptions.ConnectionError, TimeoutError, Exception):
+    print("Redis is not available for message queue. Proceeding without it...")
+    message_queue = None
 
-message_queue = None
+# message_queue = None
 
 socketio = flask_socketio.SocketIO(
     app,
