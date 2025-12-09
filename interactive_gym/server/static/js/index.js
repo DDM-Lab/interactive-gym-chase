@@ -130,6 +130,12 @@ socket.on('start_game', function(data) {
     let scene_metadata = data.scene_metadata
     // let experiment_config = data.experiment_config
 
+    // Display episode number if available
+    if (scene_metadata.episode_num !== undefined && scene_metadata.episode_num !== null) {
+        document.getElementById('episodeValue').innerText = scene_metadata.episode_num.toString();
+        document.getElementById('episodeContainer').style.display = 'block';
+    }
+
     // Hide the sceneBody and any waiting room messages or errors
     if (scene_metadata.in_game_scene_body != undefined) {
         $("#sceneBody").html(scene_metadata.in_game_scene_body);
