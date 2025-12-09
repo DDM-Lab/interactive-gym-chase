@@ -31,6 +31,7 @@ end_survey_scene = (
             "On a scale from 1 to 7, where 1 is definitely a bot, 4 is unsure, and 7 is definitely a human, indicate how likely you think that your partner is a human or a bot build to play this game?",
         ],
         scale_labels=["1", "2", "3", "4", "5", "6", "7"],
+        scale_size=7,
         text_box_header="Please provide any additional feedback you would like to share.",
     )
     .scene(scene_id="cramped_room_options_scene_0", experiment_config={})
