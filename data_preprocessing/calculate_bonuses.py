@@ -21,17 +21,19 @@ for subject_id in subject_ids:
     
     df = pd.read_csv(file_path)
     
-    # Calculate sum of delivery_reward and delivery_act_reward for each episode
+    # Calculate sum of delivery_reward, delivery_act_reward, and onion_in_pot_reward for each episode
     delivery_reward = df.groupby("episode_num")["infos.0.delivery_reward"].sum()
     delivery_act_reward = df.groupby("episode_num")["infos.0.delivery_act_reward"].sum()
+    onion_in_pot_reward = df.groupby("episode_num")["infos.0.onion_in_pot_reward"].sum()
     
     print(f"\n{subject_id}:")
-    print(f"{'Episode':<10} {'delivery_reward':<20} {'delivery_act_reward':<20}")
-    print("-" * 50)
+    print(f"{'Episode':<10} {'delivery_reward':<20} {'delivery_act_reward':<20} {'onion_in_pot_reward':<20}")
+    print("-" * 70)
     
     for episode_num in sorted(delivery_reward.index):
         reward = delivery_reward[episode_num]
         act_reward = delivery_act_reward[episode_num]
-        print(f"{int(episode_num):<10} {reward:<20.1f} {act_reward:<20.1f}")
+        onion_reward = onion_in_pot_reward[episode_num]
+        print(f"{int(episode_num):<10} {reward:<20.1f} {act_reward:<20.1f} {onion_reward:<20.1f}")
 
 print("\n" + "=" * 100)
