@@ -19,6 +19,10 @@ from interactive_gym.examples.cogrid import (
 )
 
 from interactive_gym.configurations import experiment_config
+from interactive_gym.scenes.AI_speed_specification import get_unique_frame_skip_values
+
+# Get unique frame skip values and create scenes for each
+unique_frame_skip_values = get_unique_frame_skip_values()
 
 end_survey_scene = (
     static_scene.ScalesAndTextBox(
@@ -72,11 +76,38 @@ def create_cramped_room_episode(episode_num: int) -> scene.Scene:
     
     return scene_obj
 
+def create_cramped_room_scenes_with_frame_skip(frame_skip_value: int):
+    """
+    Create a complete set of cramped room scenes (20 episodes) with the specified frame skip value.
+    Returns a SceneWrapper containing all episodes for that frame skip.
+    """
+    # Create all 20 episodes
+    episodes = [create_cramped_room_episode(episode_num) for episode_num in range(20)]
+    
+    # Update frame_skip for each episode's policies
+    for episode_scene in episodes:
+        # The scene object has a policies method that we need to override the frame_skip
+        episode_scene.policies(frame_skip=frame_skip_value)
+    
+    # Create a SceneWrapper with a descriptive scene_id
+    return scene.SceneWrapper(
+        scenes=episodes
+    )
+
+# Create scene wrappers for each unique frame skip value
+frameskip_scene_wrappers = {}
+for fs_value in unique_frame_skip_values:
+    wrapper = create_cramped_room_scenes_with_frame_skip(fs_value)
+    frameskip_scene_wrappers[fs_value] = wrapper
+
 stager = stager.Stager(
     scenes=[
         oc_scenes.start_scene,
         oc_scenes.tutorial_gym_scene,
-        *[create_cramped_room_episode(episode_num) for episode_num in range(20)],
+        scene.RandomizeOrder(
+            scenes=list(frameskip_scene_wrappers.values()),
+            keep_n=1,  # Randomly pick 1 of the frame skip conditions
+        ),
         end_survey_scene,
         oc_scenes.end_scene,
     ]

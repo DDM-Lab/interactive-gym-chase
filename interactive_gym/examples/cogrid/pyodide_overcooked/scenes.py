@@ -15,7 +15,6 @@ from interactive_gym.examples.cogrid import (
 from interactive_gym.scenes import gym_scene
 from interactive_gym.scenes import static_scene
 from interactive_gym.scenes import scene
-from interactive_gym.scenes.AI_speed_specification import get_random_frame_skip
 
 
 # Constants for controls/actions/etc.
@@ -91,8 +90,8 @@ action_mapping = {
     "Q": Toggle,
 }
 
-# Initialize frame_skip once
-frame_skip = int(get_random_frame_skip())
+# Default frame_skip value for scenes in this file
+frame_skip = 4
 
 # Define the start scene, which is the landing page for participants.
 start_scene = (
