@@ -35,5 +35,12 @@ for subject_id in subject_ids:
         act_reward = delivery_act_reward[episode_num]
         onion_reward = onion_in_pot_reward[episode_num]
         print(f"{int(episode_num):<10} {reward:<20.1f} {act_reward:<20.1f} {onion_reward:<20.1f}")
+    
+    # Calculate total delivery_reward across episodes 0-19 and bonus
+    total_delivery_reward = delivery_reward.sum()
+    bonus = total_delivery_reward * 0.20
+    print("-" * 70)
+    print(f"{'TOTAL':<10} {total_delivery_reward:<20.1f}")
+    print(f"{'BONUS (×0.20)':<10} ${bonus:<20.2f}")
 
 print("\n" + "=" * 100)
