@@ -1,7 +1,9 @@
 import pandas as pd
+import json
 from pathlib import Path
 from collections import defaultdict
 
+speed_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\interactive_gym\scenes\subject_mean_speeds.json"
 data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data"
 agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\aggregated_data"
 
@@ -111,6 +113,24 @@ def aggregate_subject_data():
 
 
 if __name__ == "__main__":
+    # Print FPS values from speed data
+    print("=" * 70)
+    print("SUBJECT FPS VALUES FROM SPEED DATA")
+    print("=" * 70)
+    
+    with open(speed_data_dir, 'r') as f:
+        speed_data = json.load(f)
+    
+    print("\nSubject FPS Values:")
+    print("-" * 40)
+    for subject_id, values in sorted(speed_data.items(), key=lambda x: int(x[0])):
+        fps = values[1]
+        print(f'Subject {subject_id:<3}: {fps:.2f} FPS')
+    
+    print("\n" + "=" * 70)
+    print("DATA AGGREGATION")
+    print("=" * 70)
+    
     # Example usage
     subject_dfs = aggregate_subject_data()
     
@@ -135,3 +155,6 @@ if __name__ == "__main__":
             print(f"    Episode {int(ep)}: {count} rows")
     
     print("\n" + "=" * 70)
+
+    print(values)
+
