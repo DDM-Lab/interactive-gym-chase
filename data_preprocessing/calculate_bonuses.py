@@ -2,10 +2,21 @@ import pandas as pd
 import json
 from pathlib import Path
 
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\aggregated_data"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\aggregated_data\pilot_2_aggregated"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\Pilot2\data"
 
-# List of subject IDs
-subject_ids = ["A11YS0T8MV3Q7C", "A1IID9HW53QMHF", "A3CZCEBX4KG54A", "AMOBC1D09Q381", "AVRV5IDK5O4S6"]
+# Get subject IDs from end_completion_code_scene folder
+scene_dir = Path(data_dir) / "end_completion_code_scene"
+subject_ids = []
+
+if scene_dir.exists():
+    for file_path in scene_dir.glob("*_metadata.json"):
+        # Extract subject ID by removing "_metadata"
+        subject_id = file_path.stem.replace("_metadata", "")
+        subject_ids.append(subject_id)
+    subject_ids.sort()
+else:
+    print(f"Warning: Scene directory not found: {scene_dir}")
 
 print("=" * 100)
 print("AGENT 0 DELIVERY REWARDS BY SUBJECT AND EPISODE")
@@ -38,9 +49,9 @@ for subject_id in subject_ids:
     
     # Calculate total delivery_reward across episodes 0-19 and bonus
     total_delivery_reward = delivery_reward.sum()
-    bonus = total_delivery_reward * 0.20
+    bonus = total_delivery_reward * 0.02
     print("-" * 70)
     print(f"{'TOTAL':<10} {total_delivery_reward:<20.1f}")
-    print(f"{'BONUS (×0.20)':<10} ${bonus:<20.2f}")
+    print(f"{'BONUS (×0.02)':<10} ${bonus:<20.2f}")
 
 print("\n" + "=" * 100)

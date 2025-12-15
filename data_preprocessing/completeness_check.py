@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from collections import defaultdict
 
-data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\Pilot2\data"
 
 
 def analyze_data_completeness():
