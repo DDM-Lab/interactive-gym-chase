@@ -90,8 +90,8 @@ def create_cramped_room_scenes_with_frame_skip(frame_skip_value: int):
         scenes=episodes
     )
 
-# Create scene wrapper with fixed frame skip value of 5
-cramped_room_scenes = create_cramped_room_scenes_with_frame_skip(5)
+# Create scene wrapper with fixed frame skip value of 1
+cramped_room_scenes = create_cramped_room_scenes_with_frame_skip(1)
 
 stager = stager.Stager(
     scenes=[
