@@ -1,5 +1,9 @@
 data/
+data_preprocessing/aggregated_data/
 .DS_Store
+
+# data aggregation
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
