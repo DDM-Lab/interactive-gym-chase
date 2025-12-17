@@ -19,10 +19,6 @@ from interactive_gym.examples.cogrid import (
 )
 
 from interactive_gym.configurations import experiment_config
-from interactive_gym.scenes.AI_speed_specification import get_unique_frame_skip_values
-
-# Get unique frame skip values and create scenes for each
-unique_frame_skip_values = get_unique_frame_skip_values()
 
 end_survey_scene = (
     static_scene.ScalesAndTextBox(
@@ -94,20 +90,14 @@ def create_cramped_room_scenes_with_frame_skip(frame_skip_value: int):
         scenes=episodes
     )
 
-# Create scene wrappers for each unique frame skip value
-frameskip_scene_wrappers = {}
-for fs_value in unique_frame_skip_values:
-    wrapper = create_cramped_room_scenes_with_frame_skip(fs_value)
-    frameskip_scene_wrappers[fs_value] = wrapper
+# Create scene wrapper with fixed frame skip value of 5
+cramped_room_scenes = create_cramped_room_scenes_with_frame_skip(5)
 
 stager = stager.Stager(
     scenes=[
         oc_scenes.start_scene,
         oc_scenes.tutorial_gym_scene,
-        scene.RandomizeOrder(
-            scenes=list(frameskip_scene_wrappers.values()),
-            keep_n=1,  # Randomly pick 1 of the frame skip conditions
-        ),
+        cramped_room_scenes,
         end_survey_scene,
         oc_scenes.end_scene,
     ]
