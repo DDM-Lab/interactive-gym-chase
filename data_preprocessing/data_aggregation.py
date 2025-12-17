@@ -38,14 +38,6 @@ def aggregate_subject_data():
     # Create aggregated data directory if it doesn't exist
     agg_dir.mkdir(parents=True, exist_ok=True)
     
-    # Extract IDs from end_completion_code_scene (subjects with completion codes)
-    completed_subject_ids = set()
-    if end_scene_dir.exists():
-        for meta_file in end_scene_dir.glob("*_metadata.json"):
-            filename = meta_file.stem.replace("_metadata", "")
-            id_part = filename.split("_")[0]
-            completed_subject_ids.add(id_part)
-    
     # Dictionary to store CSV files grouped by subject ID
     subject_files = defaultdict(list)
     
@@ -56,10 +48,6 @@ def aggregate_subject_data():
         # Extract subject ID and episode number
         parts = filename.split("_")
         subject_id = parts[0]
-        
-        # Skip subjects without completion codes
-        if subject_id not in completed_subject_ids:
-            continue
         
         # Determine episode number
         if len(parts) == 1:
@@ -74,6 +62,10 @@ def aggregate_subject_data():
                 continue
         
         subject_files[subject_id].append((episode_num, csv_file))
+    
+    # Filter to only keep subjects with episode 19 (indicating completion of all 20 episodes)
+    subject_files = {subject_id: files for subject_id, files in subject_files.items() 
+                     if any(episode_num == 19 for episode_num, _ in files)}
     
     # Create a dataframe for each subject
     subject_dataframes = {}

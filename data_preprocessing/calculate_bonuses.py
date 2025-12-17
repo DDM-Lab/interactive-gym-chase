@@ -6,18 +6,18 @@ import matplotlib.pyplot as plt
 agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\aggregated_data\main_exp"
 data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\FullRun1+2+3\data"
 fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\generated_figs"
-# Get subject IDs from end_completion_code_scene folder
-scene_dir = Path(data_dir) / "end_completion_code_scene"
+# Get subject IDs from aggregated data folder
+agg_dir = Path(agg_data_dir)
 subject_ids = []
 
-if scene_dir.exists():
-    for file_path in scene_dir.glob("*_metadata.json"):
-        # Extract subject ID by removing "_metadata"
-        subject_id = file_path.stem.replace("_metadata", "")
+if agg_dir.exists():
+    for file_path in agg_dir.glob("*_aggregated.csv"):
+        # Extract subject ID by removing "_aggregated.csv"
+        subject_id = file_path.stem.replace("_aggregated", "")
         subject_ids.append(subject_id)
     subject_ids.sort()
 else:
-    print(f"Warning: Scene directory not found: {scene_dir}")
+    print(f"Warning: Aggregated data directory not found: {agg_dir}")
 
 print("=" * 100)
 print("AGENT 0 DELIVERY REWARDS BY SUBJECT AND EPISODE")
