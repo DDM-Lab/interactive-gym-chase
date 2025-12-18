@@ -3,7 +3,7 @@ from pathlib import Path
 from collections import defaultdict
 
 #data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\FullRun1+2+3\data"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI Speed\Data\AI-Speed-5FPS\ai_speed_1_human_ai_condition_data"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI Speed\Data\AI-Speed-1FPS\ai_speed_1_human_ai_condition_data"
 #data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\Pilot2\data"
 agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\AI_speed\aggregated_data\AI_speed_1"
 
@@ -62,11 +62,13 @@ def aggregate_subject_data():
         
         subject_files[subject_id].append((episode_num, csv_file))
     
-    # Filter to only keep subjects with episode 19 (indicating completion of all 20 episodes)
+    # Filter to only keep subjects with episode 18 (indicating completion of all 20 episodes)
     subject_files = {subject_id: files for subject_id, files in subject_files.items() 
-                     if any(episode_num == 19 for episode_num, _ in files)}
-    
-    # Create a dataframe for each subject
+                     if any(episode_num == 18 for episode_num, _ in files)}
+        # Filter out subjects that already have aggregated data files
+    subject_files = {subject_id: files for subject_id, files in subject_files.items()
+                     if not (agg_dir / f"{subject_id}_aggregated.csv").exists()}
+        # Create a dataframe for each subject
     subject_dataframes = {}
     
     for subject_id, file_list in subject_files.items():
