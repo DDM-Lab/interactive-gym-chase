@@ -1,5 +1,5 @@
 data/
-data_preprocessing/aggregated_data/
+data_preprocessing
 .DS_Store
 
 # data aggregation
