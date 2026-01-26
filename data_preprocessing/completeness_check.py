@@ -1,242 +1,189 @@
-import os
 from pathlib import Path
-from collections import defaultdict
 
-#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\Pilot2\data"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\FullRun1+2+3\data"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-1"
 
-def analyze_data_completeness():
+# Parameter: "human-only", "AI-only", or "Human-AI"
+experiment_type = "human-only"
+suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
+
+
+def get_episode_data():
     """
-    Analyze the data in the data directory and report:
-    (1) IDs present in cramped_room_sp_0 but NOT in end_completion_code_scene
-    (2) IDs that do not have a CSV file with "_19" suffix
-    
-    Returns:
-        dict: A dictionary containing 'missing_from_end_scene' and 'missing_episode_19' lists
+    Extract all unique IDs from cramped_room_{suffix} and find max episode per subject.
+    Returns: dict with all_ids, max_episode_per_subject, and overall_max_episode
     """
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
     
-    # Define directory paths
-    sp_0_dir = Path(data_dir) / "cramped_room_sp_0"
-    end_scene_dir = Path(data_dir) / "end_completion_code_scene"
+    all_ids = set()
+    max_episode_per_subject = {}
     
-    # Extract IDs from cramped_room_sp_0 CSV files
-    sp_0_ids = set()
-    if sp_0_dir.exists():
-        for csv_file in sp_0_dir.glob("*.csv"):
-            # Extract ID (part before first underscore)
-            filename = csv_file.stem  # Remove .csv extension
-            id_part = filename.split("_")[0]
-            sp_0_ids.add(id_part)
+    if cramped_room_dir.exists():
+        for file_path in cramped_room_dir.glob("*_ep*.csv"):
+            filename = file_path.stem  # Remove .csv
+            # Extract ID and episode number from pattern like "ID_ep5"
+            parts = filename.split("_ep")
+            if len(parts) == 2:
+                id_part = parts[0]
+                all_ids.add(id_part)
+                try:
+                    ep_num = int(parts[1])
+                    if id_part not in max_episode_per_subject:
+                        max_episode_per_subject[id_part] = ep_num
+                    else:
+                        max_episode_per_subject[id_part] = max(max_episode_per_subject[id_part], ep_num)
+                except ValueError:
+                    pass
     
-    # Extract IDs from end_completion_code_scene (from metadata files or CSV if present)
-    end_scene_ids = set()
-    end_scene_files_found = []
-    if end_scene_dir.exists():
-        # First try to find CSV files
-        csv_files = list(end_scene_dir.glob("*.csv"))
-        if csv_files:
-            for csv_file in csv_files:
-                filename = csv_file.stem
-                id_part = filename.split("_")[0]
-                end_scene_ids.add(id_part)
-                end_scene_files_found.append(filename)
-        else:
-            # If no CSV files, extract from metadata files
-            for meta_file in end_scene_dir.glob("*_metadata.json"):
-                filename = meta_file.stem.replace("_metadata", "")
-                id_part = filename.split("_")[0]
-                end_scene_ids.add(id_part)
-                end_scene_files_found.append(filename)
-    
-    # (1) IDs in sp_0 but NOT in end_scene
-    missing_from_end_scene = sorted(list(sp_0_ids - end_scene_ids))
-    
-    # (2) IDs that don't have episode 19
-    ids_with_episode_19 = set()
-    if sp_0_dir.exists():
-        for csv_file in sp_0_dir.glob("*_19.csv"):
-            filename = csv_file.stem
-            id_part = filename.split("_")[0]
-            ids_with_episode_19.add(id_part)
-    
-    missing_episode_19 = sorted(list(sp_0_ids - ids_with_episode_19))
+    overall_max_episode = max(max_episode_per_subject.values()) if max_episode_per_subject else 0
     
     return {
-        "missing_from_end_scene": missing_from_end_scene,
-        "missing_episode_19": missing_episode_19,
-        "total_ids_in_sp_0": len(sp_0_ids),
-        "ids_in_end_scene": len(end_scene_ids),
-        "end_scene_files_found": end_scene_files_found,
-        "all_end_scene_ids": sorted(list(end_scene_ids))
+        "all_ids": sorted(list(all_ids)),
+        "max_episode_per_subject": max_episode_per_subject,
+        "overall_max_episode": overall_max_episode
     }
 
 
-def check_specific_ids_in_end_scene():
+def get_unpaired_subjects():
     """
-    Simple function to list all files in end_completion_code_scene,
-    extract IDs, and check if the four specific IDs are present.
+    Check for subjects in start_scene but not in cramped_room.
+    """
+    start_scene_dir = Path(data_dir) / "overcooked_hh_start_scene"
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
+    
+    start_scene_ids = set()
+    cramped_room_ids = set()
+    
+    if start_scene_dir.exists():
+        for file_path in start_scene_dir.glob("*"):
+            id_part = file_path.name.split("_")[0]
+            start_scene_ids.add(id_part)
+    
+    if cramped_room_dir.exists():
+        for file_path in cramped_room_dir.glob("*"):
+            id_part = file_path.name.split("_")[0]
+            cramped_room_ids.add(id_part)
+    
+    unpaired_ids = sorted(list(start_scene_ids - cramped_room_ids))
+    
+    return {
+        "total_start_scene": len(start_scene_ids),
+        "unpaired_ids": unpaired_ids,
+        "count_unpaired": len(unpaired_ids)
+    }
+
+
+def get_sanity_checks(max_episode_per_subject, overall_max_episode):
+    """
+    Sanity checks for data integrity.
     """
     end_scene_dir = Path(data_dir) / "end_completion_code_scene"
-    specific_ids = ["ADZK6MRVYIR5D", "A1UP5HLWPM1LAC", "A2WPFFUE15XC92", "A36DK2OP86BTSO"]
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
     
-    print("\n" + "=" * 70)
-    print("DIRECT CHECK: ALL FILES IN end_completion_code_scene")
-    print("=" * 70)
+    # Get IDs from end_completion_code_scene
+    end_scene_ids = set()
+    if end_scene_dir.exists():
+        for file_path in end_scene_dir.glob("*"):
+            id_part = file_path.name.split("_")[0]
+            end_scene_ids.add(id_part)
     
-    all_files = list(end_scene_dir.glob("*"))
-    print(f"\nTotal files/folders in directory: {len(all_files)}")
-    print("\nFile listing (first 30):")
-    for i, file_path in enumerate(sorted(all_files)[:30]):
-        print(f"  {file_path.name}")
+    # Get all IDs in cramped_room
+    all_cramped_room_ids = set()
+    if cramped_room_dir.exists():
+        for file_path in cramped_room_dir.glob("*"):
+            id_part = file_path.name.split("_")[0]
+            all_cramped_room_ids.add(id_part)
     
-    if len(all_files) > 30:
-        print(f"  ... and {len(all_files) - 30} more files")
+    # Check 1: Prematurely ended (has completion code, but didn't finish all episodes)
+    prematurely_ended = []
+    for id_str in end_scene_ids:
+        if id_str in max_episode_per_subject:
+            if max_episode_per_subject[id_str] < overall_max_episode:
+                prematurely_ended.append(id_str)
     
-    # Extract IDs from all files
-    ids_found = set()
-    print("\n" + "-" * 70)
-    print("Extracting IDs from filenames:")
-    print("-" * 70)
+    # Check 2: No episodes but got completion code
+    no_episodes_but_completion = []
+    for id_str in end_scene_ids:
+        if id_str not in all_cramped_room_ids:
+            no_episodes_but_completion.append(id_str)
     
-    for file_path in sorted(all_files):
-        filename = file_path.name
-        # Try to extract ID (everything before first underscore)
-        id_part = filename.split("_")[0]
-        ids_found.add(id_part)
-    
-    print(f"Unique IDs extracted: {len(ids_found)}")
-    print(f"Sample IDs: {sorted(list(ids_found))[:10]}")
-    
-    # Check for specific IDs
-    print("\n" + "-" * 70)
-    print("Checking for specific IDs:")
-    print("-" * 70)
-    
-    for id_str in specific_ids:
-        is_present = id_str in ids_found
-        status = "✓ FOUND" if is_present else "✗ NOT FOUND"
-        print(f"  {id_str}: {status}")
-    
-    print("\n" + "=" * 70)
-
-
-def check_episode_19_completion():
-    """
-    Check if specific IDs have episode 19 data in cramped_room_sp_0 directory.
-    """
-    sp_0_dir = Path(data_dir) / "cramped_room_sp_0"
-    specific_ids = ["ADZK6MRVYIR5D", "A1UP5HLWPM1LAC", "A2WPFFUE15XC92", "A36DK2OP86BTSO"]
-    
-    print("\n" + "=" * 70)
-    print("EPISODE 19 COMPLETION CHECK: cramped_room_sp_0")
-    print("=" * 70)
-    
-    # Get all CSV files for each specific ID
-    for id_str in specific_ids:
-        print(f"\nID: {id_str}")
-        print("-" * 70)
-        
-        # Find all files matching this ID
-        matching_files = list(sp_0_dir.glob(f"{id_str}*.csv"))
-        
-        if not matching_files:
-            print("  ✗ NO FILES FOUND")
-        else:
-            print(f"  Files found: {len(matching_files)}")
-            
-            # Extract episode numbers
-            episodes = []
-            for file_path in sorted(matching_files):
-                filename = file_path.stem  # Remove .csv
-                # Extract episode number (everything after the first underscore)
-                parts = filename.split("_")
-                if len(parts) == 1:
-                    # No episode number = episode 0
-                    episodes.append(0)
-                    print(f"    {file_path.name} → Episode 0")
-                else:
-                    try:
-                        ep_num = int(parts[-1])
-                        episodes.append(ep_num)
-                        print(f"    {file_path.name} → Episode {ep_num}")
-                    except ValueError:
-                        print(f"    {file_path.name} → (could not parse episode number)")
-            
-            # Check if episode 19 exists
-            has_ep_19 = 19 in episodes
-            status = "✓ YES" if has_ep_19 else "✗ NO"
-            print(f"\n  Has Episode 19: {status}")
-            print(f"  Episodes present: {sorted(set(episodes))}")
-    
-    print("\n" + "=" * 70)
+    return {
+        "prematurely_ended": sorted(prematurely_ended),
+        "no_episodes_but_completion": sorted(no_episodes_but_completion)
+    }
 
 
 if __name__ == "__main__":
-    # Run the direct check first
-    check_specific_ids_in_end_scene()
+    # Get all data
+    episode_data = get_episode_data()
+    unpaired_data = get_unpaired_subjects()
+    sanity_data = get_sanity_checks(episode_data["max_episode_per_subject"], episode_data["overall_max_episode"])
     
-    # Check episode 19 completion
-    check_episode_19_completion()
+    all_ids = episode_data["all_ids"]
+    max_episode_per_subject = episode_data["max_episode_per_subject"]
+    overall_max_episode = episode_data["overall_max_episode"]
     
-    # Then run the full analysis
-    results = analyze_data_completeness()
+    # Categorize subjects
+    fully_completed = [id_str for id_str in all_ids if max_episode_per_subject[id_str] == overall_max_episode]
+    partially_completed = [id_str for id_str in all_ids if max_episode_per_subject[id_str] < overall_max_episode]
     
-    print("=" * 60)
-    print("DATA COMPLETENESS ANALYSIS")
-    print("=" * 60)
-    print(f"\nTotal unique IDs in cramped_room_sp_0: {results['total_ids_in_sp_0']}")
-    print(f"IDs in end_completion_code_scene: {results['ids_in_end_scene']}")
+    # Print report
+    print("\n" + "=" * 70)
+    print("DATA COMPLETENESS REPORT")
+    print("=" * 70)
     
-    print("\n" + "-" * 60)
-    print("(1) IDs in cramped_room_sp_0 but NOT in end_completion_code_scene:")
-    print("-" * 60)
-    if results['missing_from_end_scene']:
-        for id_str in results['missing_from_end_scene']:
+    # Section 1: Unpaired subjects
+    print("\n(1) UNPAIRED SUBJECTS")
+    print("-" * 70)
+    print(f"Total unique IDs in overcooked_hh_start_scene: {unpaired_data['total_start_scene']}")
+    print(f"Subjects NOT in cramped_room_hh: {unpaired_data['count_unpaired']}")
+    if unpaired_data['unpaired_ids']:
+        print("\nUnpaired Subject IDs:")
+        for id_str in unpaired_data['unpaired_ids']:
             print(f"  - {id_str}")
     else:
-        print("  (None - all IDs completed the end scene)")
+        print("\n[OK] All subjects in start_scene are in cramped_room_hh")
     
-    print("\n" + "-" * 60)
-    print("(2) IDs that do NOT have a CSV file with episode '_19':")
-    print("-" * 60)
-    if results['missing_episode_19']:
-        for id_str in results['missing_episode_19']:
+    # Section 2: Partially completed
+    print("\n(2) SUBJECTS WITH PARTIAL COMPLETION")
+    print("-" * 70)
+    print(f"Max episode number: {overall_max_episode}")
+    print(f"Subjects who did NOT complete episode {overall_max_episode}: {len(partially_completed)}")
+    if partially_completed:
+        print("\nPartially Completed Subject IDs:")
+        for id_str in partially_completed:
+            print(f"  - {id_str} (max episode: {max_episode_per_subject[id_str]})")
+    else:
+        print("\n[OK] All subjects completed the maximum episode")
+    
+    # Section 3: Fully completed
+    print("\n(3) SUBJECTS WITH FULL COMPLETION")
+    print("-" * 70)
+    print(f"Subjects who completed episode {overall_max_episode}: {len(fully_completed)}")
+    if fully_completed:
+        print("\nFully Completed Subject IDs:")
+        for id_str in fully_completed:
             print(f"  - {id_str}")
     else:
-        print("  (None - all IDs have episode 19)")
+        print("\n✓ No subjects completed the maximum episode")
     
-    print("\n" + "=" * 60)
+    # Section 4: Sanity checks
+    print("\n(4) SANITY CHECKS")
+    print("-" * 70)
     
-    # Debug: Show all IDs found in end_completion_code_scene
-    print("\nDEBUG: All IDs found in end_completion_code_scene:")
-    print("-" * 60)
-    if results['end_scene_files_found']:
-        print(f"Files found: {len(results['end_scene_files_found'])}")
-        for file in sorted(results['end_scene_files_found'])[:20]:  # Show first 20
-            print(f"  {file}")
-        if len(results['end_scene_files_found']) > 20:
-            print(f"  ... and {len(results['end_scene_files_found']) - 20} more")
+    print("\nA. Subjects who prematurely ended (incomplete episodes but got completion code):")
+    if sanity_data['prematurely_ended']:
+        print(f"   Count: {len(sanity_data['prematurely_ended'])}")
+        for id_str in sanity_data['prematurely_ended']:
+            print(f"   - {id_str}")
     else:
-        print("  (No files found in end_completion_code_scene)")
+        print("   [OK] None found")
     
-    print(f"\nUnique IDs extracted: {results['ids_in_end_scene']}")
-    print(f"Sample IDs: {results['all_end_scene_ids'][:10]}")
+    print("\nB. Subjects with completion code but NO episode data:")
+    if sanity_data['no_episodes_but_completion']:
+        print(f"   Count: {len(sanity_data['no_episodes_but_completion'])}")
+        for id_str in sanity_data['no_episodes_but_completion']:
+            print(f"   - {id_str}")
+    else:
+        print("   [OK] None found")
     
-    print("\n" + "=" * 60)
-    
-    # Check specific IDs
-    specific_ids = ["ADZK6MRVYIR5D", "A1UP5HLWPM1LAC", "A2WPFFUE15XC92", "A36DK2OP86BTSO"]
-    print("SPECIFIC ID CHECK")
-    print("=" * 60)
-    
-    for id_str in specific_ids:
-        missing_end_scene = id_str in results['missing_from_end_scene']
-        missing_ep_19 = id_str in results['missing_episode_19']
-        in_end_scene = id_str in results['all_end_scene_ids']
-        
-        print(f"\nID: {id_str}")
-        print(f"  In end_completion_code_scene: {in_end_scene}")
-        print(f"  Missing from end_completion_code_scene: {missing_end_scene}")
-        print(f"  Missing episode 19: {missing_ep_19}")
-    
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)

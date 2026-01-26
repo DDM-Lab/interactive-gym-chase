@@ -2,76 +2,116 @@ import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 
-#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed\Data\FullRun1+2+3\data"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI-Speed\Data\Human-AI-Condition\ai_speed_1_human_ai_condition_data"
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\AI_speed\aggregated_data\AI_speed_1"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-1"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data"
+
+# Parameter: "human-only", "AI-only", or "Human-AI"
+experiment_type = "human-only"
+suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
+
+
+def get_max_episode():
+    """
+    Dynamically determine the max episode number from the data.
+    """
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
+    max_ep = 0
+    
+    if cramped_room_dir.exists():
+        for file_path in cramped_room_dir.glob("*_ep*.csv"):
+            filename = file_path.stem
+            parts = filename.split("_ep")
+            if len(parts) == 2:
+                try:
+                    ep_num = int(parts[1])
+                    max_ep = max(max_ep, ep_num)
+                except ValueError:
+                    pass
+    
+    return max_ep
+
+
+def get_unpaired_subjects():
+    """
+    Get IDs that are in start_scene but not in cramped_room.
+    """
+    start_scene_dir = Path(data_dir) / f"overcooked_{suffix}_start_scene"
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
+    
+    start_scene_ids = set()
+    cramped_room_ids = set()
+    
+    if start_scene_dir.exists():
+        for file_path in start_scene_dir.glob("*"):
+            id_part = file_path.name.split("_")[0]
+            start_scene_ids.add(id_part)
+    
+    if cramped_room_dir.exists():
+        for file_path in cramped_room_dir.glob("*"):
+            id_part = file_path.name.split("_")[0]
+            cramped_room_ids.add(id_part)
+    
+    unpaired_ids = sorted(list(start_scene_ids - cramped_room_ids))
+    return unpaired_ids
+
 
 def aggregate_subject_data():
     """
-    Iterate through CSV files in cramped_room_sp_0, group by subject ID,
-    and create a dataframe for each subject containing all 20 episodes.
+    Aggregate data for two groups of subjects:
+    (1) Subjects who fully completed the experiment (reached max episode)
+    (2) Subjects who were unpaired (in start_scene but not in cramped_room)
     
-    Only includes subjects who have a completion code in end_completion_code_scene.
-    
-    Process:
-    (1) Iterate through all CSV files in cramped_room_sp_0
-    (2) Group files by subject ID (string before first "_" or the full filename if no "_")
-    (3) For CSV files without episode numbers, populate "episode_num" column with 0
-    (4) Generate a dataframe for each subject combining all 20 episodes in order
-    (5) Exclude subjects without completion codes
-    (6) Save each aggregated dataframe as a CSV file in agg_data_dir
+    Each aggregated file includes a "status" column indicating:
+    - "completed" for subjects who reached the max episode
+    - "unpaired" for subjects who didn't get paired
     
     Returns:
-        dict: Dictionary with subject IDs as keys and DataFrames as values,
-              where each DataFrame contains all episodes for that subject
+        dict: Dictionary with subject IDs as keys and DataFrames as values
     """
     
-    sp_0_dir = Path(data_dir) / "cramped_room_sp_0"
-    end_scene_dir = Path(data_dir) / "end_completion_code_scene"
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
     agg_dir = Path(agg_data_dir)
     
-    if not sp_0_dir.exists():
-        raise FileNotFoundError(f"Directory not found: {sp_0_dir}")
+    if not cramped_room_dir.exists():
+        raise FileNotFoundError(f"Directory not found: {cramped_room_dir}")
     
     # Create aggregated data directory if it doesn't exist
     agg_dir.mkdir(parents=True, exist_ok=True)
     
+    # Get max episode and unpaired subjects
+    max_episode = get_max_episode()
+    unpaired_ids = get_unpaired_subjects()
+    
     # Dictionary to store CSV files grouped by subject ID
     subject_files = defaultdict(list)
     
-    # Iterate through all CSV files and group by subject ID
-    for csv_file in sorted(sp_0_dir.glob("*.csv")):
+    # Iterate through all episode CSV files and group by subject ID
+    for csv_file in sorted(cramped_room_dir.glob("*_ep*.csv")):
         filename = csv_file.stem  # Remove .csv extension
         
-        # Extract subject ID and episode number
-        parts = filename.split("_")
-        subject_id = parts[0]
+        # Extract subject ID and episode number from pattern like "ID_ep5"
+        parts = filename.split("_ep")
+        if len(parts) != 2:
+            continue
         
-        # Determine episode number
-        if len(parts) == 1:
-            # No underscore: this is the base episode (episode 0)
-            episode_num = 0
-        else:
-            # Has underscore(s): extract the episode number from the last part
-            try:
-                episode_num = int(parts[-1])
-            except ValueError:
-                # If last part is not a number, this might be a metadata file
-                continue
+        subject_id = parts[0]
+        try:
+            episode_num = int(parts[1])
+        except ValueError:
+            continue
         
         subject_files[subject_id].append((episode_num, csv_file))
     
-    # Filter to only keep subjects with episode 18 (indicating completion of all 20 episodes)
+    # Filter to only keep subjects who completed the max episode
     subject_files = {subject_id: files for subject_id, files in subject_files.items() 
-                     if any(episode_num == 18 for episode_num, _ in files)}
-        # Filter out subjects that already have aggregated data files
-    subject_files = {subject_id: files for subject_id, files in subject_files.items()
-                     if not (agg_dir / f"{subject_id}_aggregated.csv").exists()}
-        # Create a dataframe for each subject
+                     if any(episode_num == max_episode for episode_num, _ in files)}
+    
+    # Create aggregated dataframes
     subject_dataframes = {}
     
+    # (1) Process completed subjects
     for subject_id, file_list in subject_files.items():
-        # Sort files by episode number to maintain order
+        # Sort files by episode number
         file_list.sort(key=lambda x: x[0])
         
         # Read and concatenate all CSV files for this subject
@@ -79,30 +119,41 @@ def aggregate_subject_data():
         for episode_num, csv_file in file_list:
             df = pd.read_csv(csv_file)
             
-            # Check if 'episode_num' column exists
+            # Ensure episode_num column exists and is populated
             if 'episode_num' not in df.columns:
-                # Add episode_num column if it doesn't exist
                 df['episode_num'] = episode_num
             else:
-                # If column exists but is empty/NaN, fill it with the episode number
                 if df['episode_num'].isna().all() or (df['episode_num'] == '').all():
                     df['episode_num'] = episode_num
-                # If it already has values, we keep them but verify the first row
-                elif episode_num == 0:
-                    # For base episode, fill any empty values
-                    df['episode_num'] = df['episode_num'].fillna(episode_num)
             
             dfs.append(df)
         
-        # Concatenate all episodes for this subject, preserving row order
+        # Concatenate all episodes for this subject
         subject_df = pd.concat(dfs, ignore_index=True)
+        
+        # Add status column
+        subject_df['status'] = 'completed'
+        
         subject_dataframes[subject_id] = subject_df
         
-        # Save aggregated dataframe to CSV file
+        # Save aggregated dataframe
         output_file = agg_dir / f"{subject_id}_aggregated.csv"
         subject_df.to_csv(output_file, index=False)
     
-    return subject_dataframes
+    # (2) Create entries for unpaired subjects
+    for subject_id in unpaired_ids:
+        # Create a single-row dataframe with status="unpaired" and NaN for other columns
+        unpaired_df = pd.DataFrame({
+            'status': ['unpaired']
+        })
+        
+        subject_dataframes[subject_id] = unpaired_df
+        
+        # Save unpaired subject dataframe
+        output_file = agg_dir / f"{subject_id}_aggregated.csv"
+        unpaired_df.to_csv(output_file, index=False)
+    
+    return subject_dataframes, max_episode, unpaired_ids
 
 
 if __name__ == "__main__":
@@ -110,28 +161,42 @@ if __name__ == "__main__":
     print("DATA AGGREGATION")
     print("=" * 70)
     
-    # Example usage
-    subject_dfs = aggregate_subject_data()
+    subject_dfs, max_episode, unpaired_ids = aggregate_subject_data()
     
     print("=" * 70)
-    print("SUBJECT DATA AGGREGATION (Only Completed Subjects)")
+    print("SUBJECT DATA AGGREGATION")
     print("=" * 70)
     
-    print(f"\nNumber of subjects included: {len(subject_dfs)}")
-    print(f"Output directory: {agg_data_dir}")
+    # Separate completed and unpaired subjects
+    completed_subjects = [id for id in subject_dfs.keys() if id not in unpaired_ids]
     
-    for subject_id, df in sorted(subject_dfs.items()):
-        print(f"\nSubject ID: {subject_id}")
-        print(f"  Total rows: {len(df)}")
-        print(f"  Episodes: {sorted(df['episode_num'].unique())}")
-        print(f"  Columns: {len(df.columns)}")
-        print(f"  Saved to: {subject_id}_aggregated.csv")
-        
-        # Show episode distribution
-        episode_counts = df['episode_num'].value_counts().sort_index()
-        print(f"  Episodes distribution:")
-        for ep, count in episode_counts.items():
-            print(f"    Episode {int(ep)}: {count} rows")
+    print(f"\nMax episode number: {max_episode}")
+    print(f"\nCompleted subjects (reached episode {max_episode}): {len(completed_subjects)}")
+    print(f"Unpaired subjects (not in cramped_room): {len(unpaired_ids)}")
+    print(f"Total subjects included: {len(subject_dfs)}")
+    print(f"\nOutput directory: {agg_data_dir}")
+    
+    # Show completed subjects
+    if completed_subjects:
+        print("\n" + "-" * 70)
+        print("COMPLETED SUBJECTS")
+        print("-" * 70)
+        for subject_id in sorted(completed_subjects):
+            df = subject_dfs[subject_id]
+            print(f"\nSubject ID: {subject_id}")
+            print(f"  Status: completed")
+            print(f"  Total rows: {len(df)}")
+            if 'episode_num' in df.columns:
+                print(f"  Episodes: {sorted(df['episode_num'].unique())}")
+            print(f"  Columns: {len(df.columns)}")
+    
+    # Show unpaired subjects
+    if unpaired_ids:
+        print("\n" + "-" * 70)
+        print("UNPAIRED SUBJECTS")
+        print("-" * 70)
+        for subject_id in unpaired_ids:
+            print(f"  - {subject_id}")
     
     print("\n" + "=" * 70)
 
