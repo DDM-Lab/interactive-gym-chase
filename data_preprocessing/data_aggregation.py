@@ -2,12 +2,24 @@ import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-1"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-3"
 agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"
 suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
+
+# Load valid MTurk IDs from file
+valid_mturk_ids = set()
+mturk_file = Path(__file__).parent.parent / "mturk_ids_unique_to_dir_2.txt"
+if mturk_file.exists():
+    with open(mturk_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and line.startswith('- '):
+                valid_mturk_ids.add(line[2:])
+            elif line and not line.startswith('-'):
+                valid_mturk_ids.add(line)
 
 
 def get_max_episode():
@@ -34,6 +46,7 @@ def get_max_episode():
 def get_unpaired_subjects():
     """
     Get IDs that are in start_scene but not in cramped_room.
+    Only considers IDs in the valid MTurk IDs list.
     """
     start_scene_dir = Path(data_dir) / f"overcooked_{suffix}_start_scene"
     cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
@@ -44,12 +57,16 @@ def get_unpaired_subjects():
     if start_scene_dir.exists():
         for file_path in start_scene_dir.glob("*"):
             id_part = file_path.name.split("_")[0]
-            start_scene_ids.add(id_part)
+            # Only include IDs that are in the valid MTurk IDs list
+            if not valid_mturk_ids or id_part in valid_mturk_ids:
+                start_scene_ids.add(id_part)
     
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
             id_part = file_path.name.split("_")[0]
-            cramped_room_ids.add(id_part)
+            # Only include IDs that are in the valid MTurk IDs list
+            if not valid_mturk_ids or id_part in valid_mturk_ids:
+                cramped_room_ids.add(id_part)
     
     unpaired_ids = sorted(list(start_scene_ids - cramped_room_ids))
     return unpaired_ids
@@ -95,6 +112,10 @@ def aggregate_subject_data():
             continue
         
         subject_id = parts[0]
+        # Only include IDs that are in the valid MTurk IDs list
+        if valid_mturk_ids and subject_id not in valid_mturk_ids:
+            continue
+        
         try:
             episode_num = int(parts[1])
         except ValueError:

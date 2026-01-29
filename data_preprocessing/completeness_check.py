@@ -1,10 +1,22 @@
 from pathlib import Path
 
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-1"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-3"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"
 suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
+
+# Load valid MTurk IDs from file
+valid_mturk_ids = set()
+mturk_file = Path(__file__).parent.parent / "mturk_ids_unique_to_dir_2.txt"
+if mturk_file.exists():
+    with open(mturk_file, 'r') as f:
+        for line in f:
+            line = line.strip()
+            if line and line.startswith('- '):
+                valid_mturk_ids.add(line[2:])
+            elif line and not line.startswith('-'):
+                valid_mturk_ids.add(line)
 
 
 def get_episode_data():
@@ -24,7 +36,9 @@ def get_episode_data():
             parts = filename.split("_ep")
             if len(parts) == 2:
                 id_part = parts[0]
-                all_ids.add(id_part)
+                # Only include IDs that are in the valid MTurk IDs list
+                if not valid_mturk_ids or id_part in valid_mturk_ids:
+                    all_ids.add(id_part)
                 try:
                     ep_num = int(parts[1])
                     if id_part not in max_episode_per_subject:
@@ -56,12 +70,16 @@ def get_unpaired_subjects():
     if start_scene_dir.exists():
         for file_path in start_scene_dir.glob("*"):
             id_part = file_path.name.split("_")[0]
-            start_scene_ids.add(id_part)
+            # Only include IDs that are in the valid MTurk IDs list
+            if not valid_mturk_ids or id_part in valid_mturk_ids:
+                start_scene_ids.add(id_part)
     
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
             id_part = file_path.name.split("_")[0]
-            cramped_room_ids.add(id_part)
+            # Only include IDs that are in the valid MTurk IDs list
+            if not valid_mturk_ids or id_part in valid_mturk_ids:
+                cramped_room_ids.add(id_part)
     
     unpaired_ids = sorted(list(start_scene_ids - cramped_room_ids))
     
@@ -84,7 +102,9 @@ def get_sanity_checks(max_episode_per_subject, overall_max_episode):
     if end_scene_dir.exists():
         for file_path in end_scene_dir.glob("*"):
             id_part = file_path.name.split("_")[0]
-            end_scene_ids.add(id_part)
+            # Only include IDs that are in the valid MTurk IDs list
+            if not valid_mturk_ids or id_part in valid_mturk_ids:
+                end_scene_ids.add(id_part)
     
     # Get all IDs in cramped_room
     all_cramped_room_ids = set()
