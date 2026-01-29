@@ -5,51 +5,49 @@ import matplotlib.pyplot as plt
 
 # Configuration
 experiment_type = "human-only"  # Change to "AI-only" or "Human-AI" as needed
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data"
-fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\generated_figs"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data"
+fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data\generated_figs"
+aligned_team_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data\aligned_team_data"
 
-# Get subject IDs from aggregated data folder
+# Category folder names
+CATEGORY_FOLDERS = {
+    1: "category_1_failed_to_reach_main_session",
+    2: "category_2_failed_to_play_main_session",
+    3: "category_3_team_ended_during_main_session",
+    4: "category_4_completed_experiment",
+    5: "category_5_uncategorized"
+}
+
+# Get subject IDs from all category folders
 agg_dir = Path(agg_data_dir)
-subject_ids = []
+subject_data = []  # List of (subject_id, category, file_path)
 
 if agg_dir.exists():
-    for file_path in agg_dir.glob("*_aggregated.csv"):
-        # Extract subject ID by removing "_aggregated.csv"
-        subject_id = file_path.stem.replace("_aggregated", "")
-        subject_ids.append(subject_id)
-    subject_ids.sort()
-else:
-    print(f"Warning: Aggregated data directory not found: {agg_dir}")
-
-
+    for category_num, folder_name in CATEGORY_FOLDERS.items():
+        category_dir = agg_dir / folder_name
+        if category_dir.exists():
+            for file_path in category_dir.glob("*_aggregated.csv"):
+                # Extract subject ID by removing "_aggregated.csv"
+                subject_id = file_path.stem.replace("_aggregated", "")
+                subject_data.append((subject_id, category_num, file_path))
+    subject_data.sort(key=lambda x: (x[1], x[0]))  # Sort by category, then subject_id
 
 # Plot mean delivery_act_reward and onion_in_pot_reward across all subjects per episode
-print("\n" + "=" * 100)
-print("PLOTTING MEAN REWARDS BY EPISODE")
-print("=" * 100)
 
 output_path = Path(fig_dir) / "mean_rewards_by_episode.png"
 
-if output_path.exists():
-    print(f"\nPlot already exists: {output_path}")
-    print("Skipping regeneration...")
-else:
+if not output_path.exists():
     all_delivery_act_rewards = []
     all_onion_in_pot_rewards = []
-    episode_nums = None
+    all_episode_nums = set()
 
-    # Iterate through each subject and collect reward data (only completed subjects)
-    for subject_id in subject_ids:
-        file_path = Path(agg_data_dir) / f"{subject_id}_aggregated.csv"
-        
-        if not file_path.exists():
+    # Iterate through each subject and collect reward data (only category 4 - completed subjects)
+    for subject_id, category_num, file_path in subject_data:
+        # Only process category 4 (completed subjects with full episode data)
+        if category_num != 4:
             continue
         
         df = pd.read_csv(file_path)
-        
-        # Skip unpaired subjects (they won't have episode data)
-        if 'status' in df.columns and df.iloc[0]['status'] == 'unpaired':
-            continue
         
         # Calculate sum of rewards for each episode
         delivery_act_reward = df.groupby("episode_num")["infos.0.delivery_act_reward"].sum()
@@ -57,14 +55,13 @@ else:
         
         all_delivery_act_rewards.append(delivery_act_reward)
         all_onion_in_pot_rewards.append(onion_in_pot_reward)
-        
-        if episode_nums is None:
-            episode_nums = sorted(delivery_act_reward.index)
+        all_episode_nums.update(delivery_act_reward.index)
 
     # Calculate mean across all subjects
     if all_delivery_act_rewards and all_onion_in_pot_rewards:
         mean_delivery_act = pd.concat(all_delivery_act_rewards, axis=1).mean(axis=1)
         mean_onion_in_pot = pd.concat(all_onion_in_pot_rewards, axis=1).mean(axis=1)
+        episode_nums = sorted(mean_delivery_act.index)
         
         # Create the plot
         plt.figure(figsize=(12, 6))
@@ -73,7 +70,7 @@ else:
         
         plt.xlabel('Episode', fontsize=12)
         plt.ylabel('Mean Reward', fontsize=12)
-        plt.title('Mean Rewards by Episode (All Subjects)', fontsize=14, fontweight='bold')
+        plt.title('Mean Rewards by Episode (Category 4: Completed Subjects)', fontsize=14, fontweight='bold')
         plt.legend(fontsize=11)
         plt.grid(True, alpha=0.3)
         plt.xticks(episode_nums)
@@ -81,120 +78,191 @@ else:
         # Save the figure
         output_path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"\nPlot saved to: {output_path}")
-        
         plt.show()
-    else:
-        print("No data available to plot")
 
 # Generate CSV with subject_id and bonus
-print("\n" + "=" * 100)
-print("GENERATING BONUS CSV")
-print("=" * 100)
 
-csv_output_path = Path(fig_dir) / "subject_bonuses.csv"
+csv_output_path = Path(agg_data_dir) / "subject_compensations.csv"
 
-if csv_output_path.exists():
-    print(f"\nBonus CSV already exists: {csv_output_path}")
-    print("Skipping regeneration...")
-    bonus_df = pd.read_csv(csv_output_path)
-else:
-    # Dynamically determine threshold based on max episodes
-    max_episode = 0
-    for subject_id in subject_ids:
-        file_path = Path(agg_data_dir) / f"{subject_id}_aggregated.csv"
-        if file_path.exists():
-            df = pd.read_csv(file_path)
-            if 'episode_num' in df.columns:
-                subject_max_episode = df['episode_num'].max()
-                if subject_max_episode > max_episode:
-                    max_episode = subject_max_episode
+# Dynamically determine threshold based on max episodes
+max_episode = 0
+for subject_id, category_num, file_path in subject_data:
+    if category_num in [3, 4]:
+        df = pd.read_csv(file_path)
+        if 'episode_num' in df.columns:
+            subject_max_episode = df['episode_num'].max()
+            if subject_max_episode > max_episode:
+                max_episode = subject_max_episode
+
+bonus_threshold = max_episode
+
+# Category mapping
+category_mapping = {
+    1: "unpaired",
+    2: "lag",
+    3: "quit",
+    4: "completed",
+    5: "unknown"
+}
+
+bonus_data = []
+team_delivery_breakdown = []  # Track deliveries per episode per team
     
-    bonus_threshold = max_episode
-    print(f"Dynamically determined bonus threshold: {bonus_threshold} (based on max episodes)")
-    
-    bonus_data = []
+# Process categories 3 and 4 from aligned_team_data directory
+aligned_team_dir = Path(aligned_team_data_dir)
+processed_teams = set()  # Track teams already processed
 
-    for subject_id in subject_ids:
-        file_path = Path(agg_data_dir) / f"{subject_id}_aggregated.csv"
+if aligned_team_dir.exists():
+    for team_file in aligned_team_dir.glob("team_*_aligned.csv"):
+        df = pd.read_csv(team_file)
         
-        if not file_path.exists():
+        # Extract team pair from first row
+        first_row = df.iloc[0]
+        player_0 = first_row['player_subjects.0']
+        player_1 = first_row['player_subjects.1']
+        category_num = int(first_row['category'])
+        
+        # Only process categories 3 and 4
+        if category_num not in [3, 4]:
             continue
         
-        df = pd.read_csv(file_path)
+        # Create team_id from the filename
+        team_id = team_file.stem.replace("_aligned", "")
         
-        # Check if subject is unpaired
-        if 'status' in df.columns and df.iloc[0]['status'] == 'unpaired':
-            # Unpaired subjects get fixed $0.50
-            bonus = 0.50
-            status = 'unpaired'
-        else:
-            # Completed subjects: calculate bonus based on delivery_reward
-            delivery_reward = df.groupby("episode_num")["infos.0.delivery_reward"].sum()
-            total_delivery_reward = delivery_reward.sum()
-            bonus = total_delivery_reward * 0.02 if total_delivery_reward >= bonus_threshold else 0
-            status = 'completed'
+        # Skip if already processed
+        if team_id in processed_teams:
+            continue
+        processed_teams.add(team_id)
+            
+        # Calculate bonus for the team (same logic as before)
+        if category_num == 3:
+            # Category 3 (quit): Calculate bonus based on their own max episode
+            subject_episodes = df['episode_num'].nunique() if 'episode_num' in df.columns else 0
+            deliveries_per_episode = df.groupby('episode_num')['infos.0.delivery_reward'].sum()
+            num_deliveries = (deliveries_per_episode > 0).sum()
+            total_delivery_reward = deliveries_per_episode.sum()
+            bonus = total_delivery_reward * 0.02 if num_deliveries >= subject_episodes else 0
+        elif category_num == 4:
+            # Category 4 (completed): Calculate bonus based on full episode count (19)
+            deliveries_per_episode = df.groupby('episode_num')['infos.0.delivery_reward'].sum()
+            num_deliveries = (deliveries_per_episode > 0).sum()
+            total_delivery_reward = deliveries_per_episode.sum()
+            bonus = total_delivery_reward * 0.02 if num_deliveries >= bonus_threshold else 0
         
-        bonus_data.append({"subject_id": subject_id, "status": status, "bonus": bonus})
+        # Store delivery breakdown for this team
+        for episode, delivery_total in deliveries_per_episode.items():
+            team_delivery_breakdown.append({
+                "team_id": team_id,
+                "category": category_mapping[category_num],
+                "episode_num": episode,
+                "total_deliveries": delivery_total
+            })
+        
+        # Add two rows: one for each partner with the same bonus
+        bonus_data.append({
+            "subject_id": player_0,
+            "category": category_mapping[category_num],
+            "compensation": bonus,
+            "team_id": team_id,
+            "partner_num": 0
+        })
+        bonus_data.append({
+            "subject_id": player_1,
+            "category": category_mapping[category_num],
+            "compensation": bonus,
+            "team_id": team_id,
+            "partner_num": 1
+        })
 
-    # Create DataFrame and save to CSV
-    bonus_df = pd.DataFrame(bonus_data)
-    # Sort by status (unpaired first, then completed) and by subject_id within each group
-    bonus_df = bonus_df.sort_values(by=['status', 'subject_id'], key=lambda x: x.map({'unpaired': 0, 'completed': 1}) if x.name == 'status' else x)
-    csv_output_path.parent.mkdir(parents=True, exist_ok=True)
-    bonus_df.to_csv(csv_output_path, index=False)
-    print(f"\nBonus CSV saved to: {csv_output_path}")
+# Process categories 1, 2, and 5 from individual subject files
+for subject_id, category_num, file_path in subject_data:
+    # Skip categories 3 and 4 as they're handled above
+    if category_num in [3, 4]:
+        continue
+        
+    df = pd.read_csv(file_path)
+    
+    if category_num == 1:
+        # Category 1 (unpaired): 50 cents
+        bonus = 0.50
+    elif category_num == 2:
+        # Category 2 (lag): No compensation
+        bonus = 0.00
+    elif category_num == 5:
+        # Category 5: No compensation
+        bonus = 0.00
+    else:
+        bonus = 0.00
+    
+    bonus_data.append({
+        "subject_id": subject_id,
+        "category": category_mapping[category_num],
+        "compensation": bonus,
+        "team_id": None,
+        "partner_num": None
+    })
 
-# Generate list of subjects who received bonuses
-print("\n" + "=" * 100)
-print("SUBJECTS WHO RECEIVED BONUSES")
-print("=" * 100)
+# Create DataFrame
+bonus_df = pd.DataFrame(bonus_data)
+bonus_df = bonus_df.sort_values(by=['category', 'subject_id'])
 
-bonus_recipients = bonus_df[bonus_df['bonus'] > 0].copy()
-print(f"\nNumber of subjects with bonuses: {len(bonus_recipients)}")
-print(f"Total subjects: {len(bonus_df)}")
+# Display delivery breakdown for categories 3 and 4
+if team_delivery_breakdown:
+    print("\n" + "=" * 100)
+    print("DELIVERY BREAKDOWN PER EPISODE PER TEAM (Categories 3 & 4)")
+    print("=" * 100)
+    
+    delivery_df = pd.DataFrame(team_delivery_breakdown)
+    
+    for team_id in delivery_df['team_id'].unique():
+        team_data = delivery_df[delivery_df['team_id'] == team_id]
+        category = team_data['category'].iloc[0]
+        print(f"\n{team_id} ({category}):")
+        
+        for _, row in team_data.iterrows():
+            print(f"  Episode {int(row['episode_num'])}: {row['total_deliveries']} deliveries")
+        
+        total_deliveries = team_data['total_deliveries'].sum()
+        print(f"  Total: {total_deliveries} deliveries")
+    
+    print("\n" + "=" * 100)
 
-# Save bonus recipients to separate CSV
-bonus_recipients_path = Path(fig_dir) / "bonus_recipients.csv"
-bonus_recipients_path.parent.mkdir(parents=True, exist_ok=True)
-bonus_recipients.to_csv(bonus_recipients_path, index=False)
-print(f"\nBonus recipients CSV saved to: {bonus_recipients_path}")
+# Save to CSV
+csv_output_path.parent.mkdir(parents=True, exist_ok=True)
+bonus_df.to_csv(csv_output_path, index=False)
 
-# Save bonus recipients as a string list to text file
-bonus_recipients_list = bonus_recipients['subject_id'].tolist()
-bonus_recipients_txt_path = Path(fig_dir) / "bonus_recipients_list.txt"
-with open(bonus_recipients_txt_path, 'w') as f:
-    f.write(str(bonus_recipients_list))
-print(f"Bonus recipients list (as string) saved to: {bonus_recipients_txt_path}")
-print(f"\nBonus Recipients: {bonus_recipients_list}")
+# Generate list of subjects who received compensation
+compensation_recipients = bonus_df[bonus_df['compensation'] > 0].copy()
 
-# Generate histogram of bonus distribution
-print("\n" + "=" * 100)
-print("GENERATING BONUS DISTRIBUTION HISTOGRAM")
-print("=" * 100)
+# Save compensation recipients to separate CSV
+compensation_recipients_path = Path(fig_dir) / "compensation_recipients.csv"
+compensation_recipients_path.parent.mkdir(parents=True, exist_ok=True)
+compensation_recipients.to_csv(compensation_recipients_path, index=False)
 
-histogram_path = Path(fig_dir) / "bonus_distribution_histogram.png"
+# Save compensation recipients as a string list to text file
+compensation_recipients_list = compensation_recipients['subject_id'].tolist()
+compensation_recipients_txt_path = Path(fig_dir) / "compensation_recipients_list.txt"
+with open(compensation_recipients_txt_path, 'w') as f:
+    f.write(str(compensation_recipients_list))
 
-if histogram_path.exists():
-    print(f"\nHistogram already exists: {histogram_path}")
-    print("Skipping regeneration...")
-else:
+# Generate histogram of compensation distribution
+histogram_path = Path(fig_dir) / "compensation_distribution_histogram.png"
+
+if not histogram_path.exists():
     plt.figure(figsize=(10, 6))
-    plt.hist(bonus_df['bonus'], bins=15, color='steelblue', edgecolor='black', alpha=0.7)
-    plt.xlabel('Bonus Amount ($)', fontsize=12)
+    plt.hist(bonus_df['compensation'], bins=15, color='steelblue', edgecolor='black', alpha=0.7)
+    plt.xlabel('Compensation Amount ($)', fontsize=12)
     plt.ylabel('Number of Subjects', fontsize=12)
-    plt.title('Distribution of Bonuses (Unpaired=$0.50, Completed subjects based on performance)', fontsize=14, fontweight='bold')
+    plt.title('Distribution of Compensation by Category\n(Cat1=$0, Cat2=$0.50, Cat3&4=performance-based)', fontsize=14, fontweight='bold')
     plt.grid(True, alpha=0.3, axis='y')
 
-    # Add vertical line at 0.50 to highlight unpaired subjects
-    unpaired_count = (bonus_df['bonus'] == 0.50).sum()
-    if unpaired_count > 0:
-        plt.axvline(x=0.50, color='red', linestyle='--', linewidth=2, alpha=0.7, label=f'Unpaired ($0.50, {unpaired_count} subjects)')
+    # Add vertical line at 0.50 to highlight category 2 subjects
+    cat2_count = (bonus_df['compensation'] == 0.50).sum()
+    if cat2_count > 0:
+        plt.axvline(x=0.50, color='red', linestyle='--', linewidth=2, alpha=0.7, label=f'Category 2 ($0.50, {cat2_count} subjects)')
         plt.legend(fontsize=11)
 
     # Save the histogram
     histogram_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(histogram_path, dpi=300, bbox_inches='tight')
-    print(f"\nHistogram saved to: {histogram_path}")
-
     plt.show()
