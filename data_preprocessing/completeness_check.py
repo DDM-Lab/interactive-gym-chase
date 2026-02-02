@@ -1,7 +1,9 @@
 from pathlib import Path
+import csv
 
 #data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-3"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
+#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_2"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"
@@ -80,6 +82,125 @@ def get_unpaired_subjects():
         "unpaired_ids": unpaired_ids,
         "count_unpaired": len(unpaired_ids)
     }
+
+
+def get_team_pair_from_csv(csv_file_path):
+    """
+    Extract team pair (player_subjects.0 and player_subjects.1) from first row of CSV.
+    Returns: tuple (player_0_id, player_1_id) or None if extraction fails
+    """
+    try:
+        with open(csv_file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            first_row = next(reader, None)
+            if first_row:
+                player_0 = first_row.get("player_subjects.0", "").strip()
+                player_1 = first_row.get("player_subjects.1", "").strip()
+                if player_0 and player_1:
+                    return (player_0, player_1)
+    except Exception:
+        pass
+    return None
+
+
+def build_team_mapping(max_episode_per_subject, overall_max_episode):
+    """
+    Build team mapping by reading CSV files to extract player_subjects.
+    Returns dict with team pairs and related info.
+    """
+    cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
+    
+    id_to_teammates = {}  # Maps each ID to its teammate
+    team_pairs = {}  # Maps frozenset{id1, id2} -> episode info
+    
+    # Find one CSV per ID and extract team pair
+    if cramped_room_dir.exists():
+        processed_ids = set()
+        
+        for csv_file in cramped_room_dir.glob("*_ep0.csv"):
+            filename = csv_file.stem
+            id_part = filename.split("_ep")[0]
+            
+            if id_part in processed_ids:
+                continue
+            processed_ids.add(id_part)
+            
+            team_pair = get_team_pair_from_csv(csv_file)
+            if team_pair:
+                player_0, player_1 = team_pair
+                id_to_teammates[player_0] = player_1
+                id_to_teammates[player_1] = player_0
+                
+                # Normalize team pair (use frozenset to avoid duplicates)
+                team_key = frozenset([player_0, player_1])
+                if team_key not in team_pairs:
+                    team_pairs[team_key] = {
+                        "players": (player_0, player_1),
+                        "episodes": {}
+                    }
+                
+                # Store episode info for both players
+                team_pairs[team_key]["episodes"][player_0] = max_episode_per_subject.get(player_0, -1)
+                team_pairs[team_key]["episodes"][player_1] = max_episode_per_subject.get(player_1, -1)
+    
+    return {
+        "id_to_teammates": id_to_teammates,
+        "team_pairs": team_pairs
+    }
+
+
+def get_completed_teams(max_episode_per_subject, overall_max_episode, team_mapping):
+    """
+    Get teams where BOTH members completed all episodes.
+    """
+    completed_teams = []
+    single_member_teams = []
+    incomplete_teams = []
+    
+    for team_key, team_info in team_mapping["team_pairs"].items():
+        player_0, player_1 = team_info["players"]
+        ep_0 = team_info["episodes"].get(player_0, -1)
+        ep_1 = team_info["episodes"].get(player_1, -1)
+        
+        # Both members completed
+        if ep_0 == overall_max_episode and ep_1 == overall_max_episode:
+            completed_teams.append((player_0, player_1))
+        # Only one member completed
+        elif ep_0 == overall_max_episode or ep_1 == overall_max_episode:
+            incomplete_teams.append({
+                "players": (player_0, player_1),
+                "completed": player_0 if ep_0 == overall_max_episode else player_1,
+                "incomplete": player_1 if ep_0 == overall_max_episode else player_0,
+                "ep_0": ep_0,
+                "ep_1": ep_1
+            })
+    
+    return {
+        "completed_teams": sorted(completed_teams),
+        "incomplete_teams": incomplete_teams
+    }
+
+
+def get_team_ended(max_episode_per_subject, overall_max_episode, team_mapping):
+    """
+    Get teams that ended prematurely (at least one member with data but max_episode < overall_max).
+    """
+    team_ended_teams = []
+    
+    for team_key, team_info in team_mapping["team_pairs"].items():
+        player_0, player_1 = team_info["players"]
+        ep_0 = team_info["episodes"].get(player_0, -1)
+        ep_1 = team_info["episodes"].get(player_1, -1)
+        
+        # At least one has data, but neither completed all episodes
+        if (ep_0 >= 0 or ep_1 >= 0) and ep_0 < overall_max_episode and ep_1 < overall_max_episode:
+            team_ended_teams.append({
+                "players": (player_0, player_1),
+                "ep_0": ep_0,
+                "ep_1": ep_1
+            })
+    
+    return sorted(team_ended_teams, key=lambda x: (x["ep_0"], x["ep_1"]), reverse=True)
 
 
 def get_sanity_checks(max_episode_per_subject, overall_max_episode):
@@ -203,30 +324,46 @@ if __name__ == "__main__":
     else:
         print("\n[OK] None found")
     
-    # Category 3: Subject's team ended during main session
-    print("\n(3) SUBJECT'S TEAM ENDED DURING MAIN SESSION")
+    # Build team mapping
+    team_mapping = build_team_mapping(max_episode_per_subject, overall_max_episode)
+    completed_team_data = get_completed_teams(max_episode_per_subject, overall_max_episode, team_mapping)
+    team_ended_data = get_team_ended(max_episode_per_subject, overall_max_episode, team_mapping)
+    
+    # Category 3: Teams that ended prematurely
+    print("\n(3) TEAMS THAT ENDED PREMATURELY")
     print("-" * 70)
-    print(f"Count: {len(team_ended)}")
-    print("Criteria: In start_scene, HAS data in cramped_room_hh, NOT in end_completion_code_scene")
-    if team_ended:
-        print("\nSubject IDs:")
-        for id_str in team_ended:
-            max_ep = max_episode_per_subject.get(id_str, 0)
-            print(f"  - {id_str} (max episode: {max_ep})")
+    print(f"Count: {len(team_ended_data)} teams")
+    print("Criteria: At least one team member has data, but neither completed all episodes")
+    if team_ended_data:
+        print("\nTeam Pairs (Player0, Player1) [Episodes reached by each player]:")
+        for team_info in team_ended_data:
+            p0, p1 = team_info["players"]
+            ep0, ep1 = team_info["ep_0"], team_info["ep_1"]
+            print(f"  - ({p0}, {p1}) [Player0: {ep0}, Player1: {ep1}]")
     else:
         print("\n[OK] None found")
     
-    # Category 4: Completed subjects
-    print("\n(4) SUBJECT COMPLETED THE EXPERIMENT")
+    # Category 4: Completed teams
+    print("\n(4) TEAMS THAT COMPLETED THE EXPERIMENT")
     print("-" * 70)
-    print(f"Count: {len(completed_subjects)}")
-    print(f"Criteria: Has max number of episodes ({overall_max_episode}) in cramped_room_hh")
-    if completed_subjects:
-        print("\nSubject IDs:")
-        for id_str in completed_subjects:
-            print(f"  - {id_str}")
+    print(f"Count: {len(completed_team_data['completed_teams'])} teams ({len(completed_team_data['completed_teams']) * 2} individuals)")
+    print(f"Criteria: BOTH team members have max number of episodes ({overall_max_episode})")
+    if completed_team_data["completed_teams"]:
+        print("\nCompleted Team Pairs:")
+        for p0, p1 in completed_team_data["completed_teams"]:
+            print(f"  - ({p0}, {p1})")
     else:
         print("\n[OK] None found")
+    
+    # Data integrity warning: incomplete teams
+    if completed_team_data["incomplete_teams"]:
+        print(f"\n⚠️  DATA INTEGRITY WARNING: {len(completed_team_data['incomplete_teams'])} teams with only ONE member completing")
+        print("   These teams have unequal data and may need to be excluded from analysis:")
+        for team in completed_team_data["incomplete_teams"]:
+            p0, p1 = team["players"]
+            completed = team["completed"]
+            incomplete = team["incomplete"]
+            print(f"  - ({p0}, {p1}): {completed} completed, {incomplete} completed {team['ep_' + ('0' if p0 == incomplete else '1')]} episodes")
     
     # Category 5: Uncategorized - IDs that don't fall into any of the above categories
     all_categorized = set(failed_to_reach + failed_to_play + team_ended + completed_subjects)
