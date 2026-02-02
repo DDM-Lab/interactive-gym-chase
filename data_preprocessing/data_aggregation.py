@@ -2,8 +2,8 @@ import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-3"
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_1"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"
@@ -17,19 +17,6 @@ CATEGORY_FOLDERS = {
     4: "category_4_completed_experiment",
     5: "category_5_uncategorized"
 }
-
-# Load valid MTurk IDs from file
-valid_mturk_ids = set()
-mturk_file = Path(__file__).parent.parent / "mturk_ids_unique_to_dir_2.txt"
-if mturk_file.exists():
-    with open(mturk_file, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and line.startswith('- '):
-                valid_mturk_ids.add(line[2:])
-            elif line and not line.startswith('-'):
-                valid_mturk_ids.add(line)
-
 
 def get_max_episode():
     """
@@ -65,24 +52,21 @@ def categorize_subjects():
     start_scene_ids = set()
     if start_scene_dir.exists():
         for file_path in start_scene_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                start_scene_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            start_scene_ids.add(id_part)
     
     cramped_room_ids = set()
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
             if file_path.is_file():
-                id_part = file_path.name.split("_")[0]
-                if not valid_mturk_ids or id_part in valid_mturk_ids:
-                    cramped_room_ids.add(id_part)
+                id_part = file_path.stem.split("_")[0]
+                cramped_room_ids.add(id_part)
     
     end_scene_ids = set()
     if end_scene_dir.exists():
         for file_path in end_scene_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                end_scene_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            end_scene_ids.add(id_part)
     
     # Get episode data
     max_episode_per_subject = {}
@@ -92,15 +76,14 @@ def categorize_subjects():
             parts = filename.split("_ep")
             if len(parts) == 2:
                 id_part = parts[0]
-                if not valid_mturk_ids or id_part in valid_mturk_ids:
-                    try:
-                        ep_num = int(parts[1])
-                        if id_part not in max_episode_per_subject:
-                            max_episode_per_subject[id_part] = ep_num
-                        else:
-                            max_episode_per_subject[id_part] = max(max_episode_per_subject[id_part], ep_num)
-                    except ValueError:
-                        pass
+                try:
+                    ep_num = int(parts[1])
+                    if id_part not in max_episode_per_subject:
+                        max_episode_per_subject[id_part] = ep_num
+                    else:
+                        max_episode_per_subject[id_part] = max(max_episode_per_subject[id_part], ep_num)
+                except ValueError:
+                    pass
     
     overall_max_episode = max(max_episode_per_subject.values()) if max_episode_per_subject else 0
     
@@ -125,7 +108,9 @@ def categorize_subjects():
     
     # Category 5: Uncategorized
     all_categorized = set(category_1 + category_2 + category_3 + category_4)
-    category_5 = sorted([id_str for id_str in valid_mturk_ids if id_str not in all_categorized])
+    # Build universe of IDs from discovered sources
+    all_ids_universe = start_scene_ids.union(cramped_room_ids).union(end_scene_ids).union(set(max_episode_per_subject.keys()))
+    category_5 = sorted([id_str for id_str in all_ids_universe if id_str not in all_categorized])
     
     return {
         1: category_1,
@@ -178,8 +163,6 @@ def aggregate_subject_data():
             continue
         
         subject_id = parts[0]
-        if valid_mturk_ids and subject_id not in valid_mturk_ids:
-            continue
         
         try:
             episode_num = int(parts[1])

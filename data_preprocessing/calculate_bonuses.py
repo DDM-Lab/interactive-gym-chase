@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 
 # Configuration
 experiment_type = "human-only"  # Change to "AI-only" or "Human-AI" as needed
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data"
-fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data\generated_figs"
-aligned_team_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\pilot_2_aggregated_data\aligned_team_data"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_1"
+fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_1\generated_figs"
+aligned_team_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_1\aligned_team_data"
 
 # Category folder names
 CATEGORY_FOLDERS = {
@@ -33,52 +33,53 @@ if agg_dir.exists():
     subject_data.sort(key=lambda x: (x[1], x[0]))  # Sort by category, then subject_id
 
 # Plot mean delivery_act_reward and onion_in_pot_reward across all subjects per episode
+# COMMENTED OUT FOR NOW - visualization not needed
 
-output_path = Path(fig_dir) / "mean_rewards_by_episode.png"
-
-if not output_path.exists():
-    all_delivery_act_rewards = []
-    all_onion_in_pot_rewards = []
-    all_episode_nums = set()
-
-    # Iterate through each subject and collect reward data (only category 4 - completed subjects)
-    for subject_id, category_num, file_path in subject_data:
-        # Only process category 4 (completed subjects with full episode data)
-        if category_num != 4:
-            continue
-        
-        df = pd.read_csv(file_path)
-        
-        # Calculate sum of rewards for each episode
-        delivery_act_reward = df.groupby("episode_num")["infos.0.delivery_act_reward"].sum()
-        onion_in_pot_reward = df.groupby("episode_num")["infos.0.onion_in_pot_reward"].sum()
-        
-        all_delivery_act_rewards.append(delivery_act_reward)
-        all_onion_in_pot_rewards.append(onion_in_pot_reward)
-        all_episode_nums.update(delivery_act_reward.index)
-
-    # Calculate mean across all subjects
-    if all_delivery_act_rewards and all_onion_in_pot_rewards:
-        mean_delivery_act = pd.concat(all_delivery_act_rewards, axis=1).mean(axis=1)
-        mean_onion_in_pot = pd.concat(all_onion_in_pot_rewards, axis=1).mean(axis=1)
-        episode_nums = sorted(mean_delivery_act.index)
-        
-        # Create the plot
-        plt.figure(figsize=(12, 6))
-        plt.plot(episode_nums, mean_delivery_act, marker='o', linewidth=2, label='Mean Delivery Act Reward')
-        plt.plot(episode_nums, mean_onion_in_pot, marker='s', linewidth=2, label='Mean Onion in Pot Reward')
-        
-        plt.xlabel('Episode', fontsize=12)
-        plt.ylabel('Mean Reward', fontsize=12)
-        plt.title('Mean Rewards by Episode (Category 4: Completed Subjects)', fontsize=14, fontweight='bold')
-        plt.legend(fontsize=11)
-        plt.grid(True, alpha=0.3)
-        plt.xticks(episode_nums)
-        
-        # Save the figure
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        plt.show()
+# output_path = Path(fig_dir) / "mean_rewards_by_episode.png"
+# 
+# if not output_path.exists():
+#     all_delivery_act_rewards = []
+#     all_onion_in_pot_rewards = []
+#     all_episode_nums = set()
+# 
+#     # Iterate through each subject and collect reward data (only category 4 - completed subjects)
+#     for subject_id, category_num, file_path in subject_data:
+#         # Only process category 4 (completed subjects with full episode data)
+#         if category_num != 4:
+#             continue
+#         
+#         df = pd.read_csv(file_path)
+#         
+#         # Calculate sum of rewards for each episode
+#         delivery_act_reward = df.groupby("episode_num")["infos.0.delivery_act_reward"].sum()
+#         onion_in_pot_reward = df.groupby("episode_num")["infos.0.onion_in_pot_reward"].sum()
+#         
+#         all_delivery_act_rewards.append(delivery_act_reward)
+#         all_onion_in_pot_rewards.append(onion_in_pot_reward)
+#         all_episode_nums.update(delivery_act_reward.index)
+# 
+#     # Calculate mean across all subjects
+#     if all_delivery_act_rewards and all_onion_in_pot_rewards:
+#         mean_delivery_act = pd.concat(all_delivery_act_rewards, axis=1).mean(axis=1)
+#         mean_onion_in_pot = pd.concat(all_onion_in_pot_rewards, axis=1).mean(axis=1)
+#         episode_nums = sorted(mean_delivery_act.index)
+#         
+#         # Create the plot
+#         plt.figure(figsize=(12, 6))
+#         plt.plot(episode_nums, mean_delivery_act, marker='o', linewidth=2, label='Mean Delivery Act Reward')
+#         plt.plot(episode_nums, mean_onion_in_pot, marker='s', linewidth=2, label='Mean Onion in Pot Reward')
+#         
+#         plt.xlabel('Episode', fontsize=12)
+#         plt.ylabel('Mean Reward', fontsize=12)
+#         plt.title('Mean Rewards by Episode (Category 4: Completed Subjects)', fontsize=14, fontweight='bold')
+#         plt.legend(fontsize=11)
+#         plt.grid(True, alpha=0.3)
+#         plt.xticks(episode_nums)
+#         
+#         # Save the figure
+#         output_path.parent.mkdir(parents=True, exist_ok=True)
+#         plt.savefig(output_path, dpi=300, bbox_inches='tight')
+#         plt.show()
 
 # Generate CSV with subject_id and bonus
 
@@ -138,13 +139,25 @@ if aligned_team_dir.exists():
         if category_num == 3:
             # Category 3 (quit): Calculate bonus based on their own max episode
             subject_episodes = df['episode_num'].nunique() if 'episode_num' in df.columns else 0
-            deliveries_per_episode = df.groupby('episode_num')['infos.0.delivery_reward'].sum()
+            
+            # Check if infos.0.delivery_reward exists, otherwise use fallback
+            if 'infos.0.delivery_reward' in df.columns:
+                deliveries_per_episode = df.groupby('episode_num')['infos.0.delivery_reward'].sum()
+            else:
+                # Fallback: sum(rewards.0) per episode (equivalent to infos.0.delivery_reward)
+                deliveries_per_episode = df.groupby('episode_num')['rewards.0'].sum()
             num_deliveries = (deliveries_per_episode > 0).sum()
             total_delivery_reward = deliveries_per_episode.sum()
             bonus = total_delivery_reward * 0.02 if num_deliveries >= subject_episodes else 0
         elif category_num == 4:
             # Category 4 (completed): Calculate bonus based on full episode count (19)
-            deliveries_per_episode = df.groupby('episode_num')['infos.0.delivery_reward'].sum()
+            
+            # Check if infos.0.delivery_reward exists, otherwise use fallback
+            if 'infos.0.delivery_reward' in df.columns:
+                deliveries_per_episode = df.groupby('episode_num')['infos.0.delivery_reward'].sum()
+            else:
+                # Fallback: sum(rewards.0) per episode (equivalent to infos.0.delivery_reward)
+                deliveries_per_episode = df.groupby('episode_num')['rewards.0'].sum()
             num_deliveries = (deliveries_per_episode > 0).sum()
             total_delivery_reward = deliveries_per_episode.sum()
             bonus = total_delivery_reward * 0.02 if num_deliveries >= bonus_threshold else 0
@@ -206,26 +219,25 @@ for subject_id, category_num, file_path in subject_data:
 bonus_df = pd.DataFrame(bonus_data)
 bonus_df = bonus_df.sort_values(by=['category', 'subject_id'])
 
-# Display delivery breakdown for categories 3 and 4
+# Sanity check: report total deliveries per team
+print("\n" + "=" * 80)
+print("SANITY CHECK: TOTAL DELIVERIES PER TEAM")
+print("=" * 80)
+
 if team_delivery_breakdown:
-    print("\n" + "=" * 100)
-    print("DELIVERY BREAKDOWN PER EPISODE PER TEAM (Categories 3 & 4)")
-    print("=" * 100)
-    
     delivery_df = pd.DataFrame(team_delivery_breakdown)
     
-    for team_id in delivery_df['team_id'].unique():
+    for team_id in sorted(delivery_df['team_id'].unique()):
         team_data = delivery_df[delivery_df['team_id'] == team_id]
         category = team_data['category'].iloc[0]
-        print(f"\n{team_id} ({category}):")
-        
-        for _, row in team_data.iterrows():
-            print(f"  Episode {int(row['episode_num'])}: {row['total_deliveries']} deliveries")
-        
         total_deliveries = team_data['total_deliveries'].sum()
-        print(f"  Total: {total_deliveries} deliveries")
-    
-    print("\n" + "=" * 100)
+        
+        print(f"\n{team_id} ({category})")
+        for _, row in team_data.sort_values('episode_num').iterrows():
+            print(f"  Episode {int(row['episode_num']):2d}: {int(row['total_deliveries']):3d} deliveries")
+        print(f"  Total: {int(total_deliveries):3d} deliveries")
+
+print("\n" + "=" * 80)
 
 # Save to CSV
 csv_output_path.parent.mkdir(parents=True, exist_ok=True)

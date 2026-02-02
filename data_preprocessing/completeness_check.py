@@ -1,22 +1,13 @@
 from pathlib import Path
 
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-3"
+#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\Pilot1-2\human-only-data-pilot-3"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"
 suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
 
-# Load valid MTurk IDs from file
-valid_mturk_ids = set()
-mturk_file = Path(__file__).parent.parent / "mturk_ids_unique_to_dir_2.txt"
-if mturk_file.exists():
-    with open(mturk_file, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line and line.startswith('- '):
-                valid_mturk_ids.add(line[2:])
-            elif line and not line.startswith('-'):
-                valid_mturk_ids.add(line)
+ 
 
 
 def get_episode_data():
@@ -30,14 +21,12 @@ def get_episode_data():
     max_episode_per_subject = {}
     
     if cramped_room_dir.exists():
-        # First, collect all IDs from any file in the directory
+        # First, collect all IDs from any file in the directory (process all files)
         for file_path in cramped_room_dir.glob("*"):
             if file_path.is_file():
                 filename = file_path.stem
                 id_part = filename.split("_")[0]
-                # Only include IDs that are in the valid MTurk IDs list
-                if not valid_mturk_ids or id_part in valid_mturk_ids:
-                    all_ids.add(id_part)
+                all_ids.add(id_part)
         
         # Then, extract episode numbers from episode files
         for file_path in cramped_room_dir.glob("*_ep*.csv"):
@@ -46,16 +35,14 @@ def get_episode_data():
             parts = filename.split("_ep")
             if len(parts) == 2:
                 id_part = parts[0]
-                # Only include IDs that are in the valid MTurk IDs list
-                if not valid_mturk_ids or id_part in valid_mturk_ids:
-                    try:
-                        ep_num = int(parts[1])
-                        if id_part not in max_episode_per_subject:
-                            max_episode_per_subject[id_part] = ep_num
-                        else:
-                            max_episode_per_subject[id_part] = max(max_episode_per_subject[id_part], ep_num)
-                    except ValueError:
-                        pass
+                try:
+                    ep_num = int(parts[1])
+                    if id_part not in max_episode_per_subject:
+                        max_episode_per_subject[id_part] = ep_num
+                    else:
+                        max_episode_per_subject[id_part] = max(max_episode_per_subject[id_part], ep_num)
+                except ValueError:
+                    pass
     
     overall_max_episode = max(max_episode_per_subject.values()) if max_episode_per_subject else 0
     
@@ -70,7 +57,7 @@ def get_unpaired_subjects():
     """
     Check for subjects in start_scene but not in cramped_room.
     """
-    start_scene_dir = Path(data_dir) / "overcooked_hh_start_scene"
+    start_scene_dir = Path(data_dir) / f"overcooked_{suffix}_start_scene"
     cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
     
     start_scene_ids = set()
@@ -78,17 +65,13 @@ def get_unpaired_subjects():
     
     if start_scene_dir.exists():
         for file_path in start_scene_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            # Only include IDs that are in the valid MTurk IDs list
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                start_scene_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            start_scene_ids.add(id_part)
     
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            # Only include IDs that are in the valid MTurk IDs list
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                cramped_room_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            cramped_room_ids.add(id_part)
     
     unpaired_ids = sorted(list(start_scene_ids - cramped_room_ids))
     
@@ -110,16 +93,14 @@ def get_sanity_checks(max_episode_per_subject, overall_max_episode):
     end_scene_ids = set()
     if end_scene_dir.exists():
         for file_path in end_scene_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            # Only include IDs that are in the valid MTurk IDs list
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                end_scene_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            end_scene_ids.add(id_part)
     
     # Get all IDs in cramped_room
     all_cramped_room_ids = set()
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
+            id_part = file_path.stem.split("_")[0]
             all_cramped_room_ids.add(id_part)
     
     # Check 1: Prematurely ended (has completion code, but didn't finish all episodes)
@@ -156,23 +137,20 @@ if __name__ == "__main__":
     start_scene_ids = set()
     if start_scene_dir.exists():
         for file_path in start_scene_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                start_scene_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            start_scene_ids.add(id_part)
     
     cramped_room_ids = set()
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                cramped_room_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            cramped_room_ids.add(id_part)
     
     end_scene_ids = set()
     if end_scene_dir.exists():
         for file_path in end_scene_dir.glob("*"):
-            id_part = file_path.name.split("_")[0]
-            if not valid_mturk_ids or id_part in valid_mturk_ids:
-                end_scene_ids.add(id_part)
+            id_part = file_path.stem.split("_")[0]
+            end_scene_ids.add(id_part)
     
     # Categorize subjects based on the 4 categories
     # (1) Subject failed to reach main session: In start_scene, NOT in cramped_room, NOT in end_completion
@@ -252,7 +230,9 @@ if __name__ == "__main__":
     
     # Category 5: Uncategorized - IDs that don't fall into any of the above categories
     all_categorized = set(failed_to_reach + failed_to_play + team_ended + completed_subjects)
-    uncategorized = sorted([id_str for id_str in valid_mturk_ids if id_str not in all_categorized])
+    # Build universe of IDs from all discovered sources
+    all_ids_universe = start_scene_ids.union(cramped_room_ids).union(end_scene_ids).union(set(max_episode_per_subject.keys()))
+    uncategorized = sorted([id_str for id_str in all_ids_universe if id_str not in all_categorized])
     
     print("\n(5) UNCATEGORIZED (NOT IN ANY ABOVE CATEGORY)")
     print("-" * 70)
