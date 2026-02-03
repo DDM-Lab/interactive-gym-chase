@@ -1,5 +1,6 @@
 from pathlib import Path
 import csv
+from quit_initiator_detector import detect_quit_initiator
 
 data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_2"
 
@@ -241,6 +242,37 @@ def get_sanity_checks(max_episode_per_subject, overall_max_episode):
     }
 
 
+def get_quitter_for_team(player_0, player_1, console_logs_dir):
+    """
+    Attempt to determine which player quit first by analyzing console logs.
+    
+    Args:
+        player_0: First player's subject ID
+        player_1: Second player's subject ID
+        console_logs_dir: Path to directory containing console.jsonl files
+    
+    Returns:
+        tuple (quitter_id, reason) or (None, reason_why_not_found)
+    """
+    console_logs_dir = Path(console_logs_dir)
+    
+    # Build paths to console logs
+    log_file_1 = console_logs_dir / f"{player_0}_console.jsonl"
+    log_file_2 = console_logs_dir / f"{player_1}_console.jsonl"
+    
+    # Check if both files exist
+    if not log_file_1.exists():
+        return None, f"Console log not found for {player_0}"
+    if not log_file_2.exists():
+        return None, f"Console log not found for {player_1}"
+    
+    try:
+        quitter, details = detect_quit_initiator(str(log_file_1), str(log_file_2))
+        return quitter, details.get('reason', 'Unknown reason')
+    except Exception as e:
+        return None, f"Error analyzing logs: {str(e)}"
+
+
 if __name__ == "__main__":
     # Get all data
     episode_data = get_episode_data()
@@ -332,12 +364,26 @@ if __name__ == "__main__":
     print("-" * 70)
     print(f"Count: {len(team_ended_data)} teams")
     print("Criteria: At least one team member has data, but neither completed all episodes")
+    
+    # Determine console logs directory
+    console_logs_dir = Path(data_dir) / "console_logs"
+    
     if team_ended_data:
         print("\nTeam Pairs (Player0, Player1) [Episodes reached by each player]:")
         for team_info in team_ended_data:
             p0, p1 = team_info["players"]
             ep0, ep1 = team_info["ep_0"], team_info["ep_1"]
-            print(f"  - ({p0}, {p1}) [Player0: {ep0}, Player1: {ep1}]")
+            print(f"  - ({p0}, {p1}) [Player0: {ep0}, Player1: {ep1}]", end="")
+            
+            # Try to determine quitter
+            if console_logs_dir.exists():
+                quitter, reason = get_quitter_for_team(p0, p1, console_logs_dir)
+                if quitter:
+                    print(f" → QUITTER: {quitter}")
+                else:
+                    print(f" → {reason}")
+            else:
+                print(f" → Console logs directory not found at {console_logs_dir}")
     else:
         print("\n[OK] None found")
     

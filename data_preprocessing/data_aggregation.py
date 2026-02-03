@@ -2,6 +2,7 @@ import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 import csv
+from quit_initiator_detector import detect_quit_initiator
 
 data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
 agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_1"
@@ -392,11 +393,41 @@ def identify_team_pairs(base_agg_dir, categories):
     return team_pairs
 
 
+def get_quitter_for_team(player_0, player_1, console_logs_dir):
+    """
+    Attempt to determine which player quit first by analyzing console logs.
+    
+    Args:
+        player_0: First player's subject ID
+        player_1: Second player's subject ID
+        console_logs_dir: Path to directory containing console.jsonl files
+    
+    Returns:
+        str: The subject ID of the quitter, or "unknown" if not found
+    """
+    console_logs_dir = Path(console_logs_dir)
+    
+    # Build paths to console logs
+    log_file_1 = console_logs_dir / f"{player_0}_console.jsonl"
+    log_file_2 = console_logs_dir / f"{player_1}_console.jsonl"
+    
+    # Check if both files exist
+    if not log_file_1.exists() or not log_file_2.exists():
+        return "unknown"
+    
+    try:
+        quitter, details = detect_quit_initiator(str(log_file_1), str(log_file_2))
+        return quitter if quitter else "unknown"
+    except Exception:
+        return "unknown"
+
+
 def align_team_timesteps(base_agg_dir, categories):
     """
     Align timesteps between team pairs for categories 3 and 4.
     For shared episodes: uses alignment logic to combine data from both agents.
     For episodes only one agent has: uses that agent's data wholesale (no alignment).
+    Adds quitter_id column for Category 3 teams (quit teams).
     """
     team_pairs = identify_team_pairs(base_agg_dir, categories)
     
@@ -406,6 +437,9 @@ def align_team_timesteps(base_agg_dir, categories):
     # Create output directory
     aligned_dir = base_agg_dir / "aligned_team_data"
     aligned_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Determine console logs directory
+    console_logs_dir = Path(data_dir) / "console_logs"
     
     processed_pairs = set()
     alignment_stats = []
@@ -520,6 +554,11 @@ def align_team_timesteps(base_agg_dir, categories):
         if combined_episodes:
             combined_df = pd.concat(combined_episodes, ignore_index=True)
             combined_df = combined_df.sort_values('episode_num').reset_index(drop=True)
+            
+            # Add quitter_id column for Category 3 teams (quit teams)
+            if subject_category == 3:
+                quitter_id = get_quitter_for_team(subject_id, partner_id, console_logs_dir)
+                combined_df['quitter_id'] = quitter_id
             
             # Save combined file
             output_file = aligned_dir / f"team_{subject_id}_{partner_id}_aligned.csv"

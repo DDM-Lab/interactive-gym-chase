@@ -134,6 +134,11 @@ if aligned_team_dir.exists():
         if team_id in processed_teams:
             continue
         processed_teams.add(team_id)
+        
+        # Get quitter_id if it exists (for category 3 teams)
+        quitter_id = None
+        if category_num == 3 and 'quitter_id' in df.columns:
+            quitter_id = first_row['quitter_id']
             
         # Calculate bonus for the team (same logic as before)
         if category_num == 3:
@@ -171,20 +176,39 @@ if aligned_team_dir.exists():
                 "total_deliveries": delivery_total
             })
         
-        # Add two rows: one for each partner with the same bonus
+        # Add two rows: one for each partner
+        # For category 3, check if quitter was identified and apply penalty only if identified
+        if category_num == 3 and quitter_id not in [None, "None", "unknown"]:
+            # Quitter identified: penalize the quitter
+            player_0_bonus = 0 if quitter_id == player_0 else bonus
+            player_1_bonus = 0 if quitter_id == player_1 else bonus
+            quitter_display_id = quitter_id
+        elif category_num == 3:
+            # Quitter not identified: both get full bonus
+            player_0_bonus = bonus
+            player_1_bonus = bonus
+            quitter_display_id = "unidentified"
+        else:
+            # Categories 1, 2, 4, 5: no quitter logic
+            player_0_bonus = bonus
+            player_1_bonus = bonus
+            quitter_display_id = None
+        
         bonus_data.append({
             "subject_id": player_0,
             "category": category_mapping[category_num],
-            "compensation": bonus,
+            "compensation": player_0_bonus,
             "team_id": team_id,
-            "partner_num": 0
+            "partner_num": 0,
+            "quitter_ID": quitter_display_id if category_num == 3 else None
         })
         bonus_data.append({
             "subject_id": player_1,
             "category": category_mapping[category_num],
-            "compensation": bonus,
+            "compensation": player_1_bonus,
             "team_id": team_id,
-            "partner_num": 1
+            "partner_num": 1,
+            "quitter_ID": quitter_display_id if category_num == 3 else None
         })
 
 # Process categories 1, 2, and 5 from individual subject files
@@ -212,12 +236,13 @@ for subject_id, category_num, file_path in subject_data:
         "category": category_mapping[category_num],
         "compensation": bonus,
         "team_id": None,
-        "partner_num": None
+        "partner_num": None,
+        "quitter_ID": None
     })
 
 # Create DataFrame
 bonus_df = pd.DataFrame(bonus_data)
-bonus_df = bonus_df.sort_values(by=['category', 'subject_id'])
+bonus_df = bonus_df.sort_values(by=['category', 'team_id', 'subject_id'], na_position='last')
 
 # Sanity check: report total deliveries per team
 print("\n" + "=" * 80)
