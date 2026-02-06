@@ -1,5 +1,11 @@
 data/
-data_preprocessing
+data_preprocessing/AI_speed/
+data_preprocessing/generated_figs/
+data_preprocessing/human_only/
+data_preprocessing/human_speed_AI/
+data_preprocessing/__pycache__/
+data_preprocessing/output.txt
+data_preprocessing/data_preprocessing.Rproj
 .DS_Store
 
 # data aggregation
