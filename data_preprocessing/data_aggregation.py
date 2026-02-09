@@ -6,8 +6,8 @@ from quit_initiator_detector import detect_quit_initiator
 
 #data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
 #data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-run-1-aws"
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_2"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_2"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\post_pilot"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-post-pilot"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"
@@ -21,6 +21,25 @@ CATEGORY_FOLDERS = {
     4: "category_4_completed_experiment",
     5: "category_5_uncategorized"
 }
+
+def extract_subject_id(filename):
+    """
+    Extract subject ID from filename, handling multi-underscore IDs like 'grace_t_6'.
+    For episode files (e.g., 'grace_t_6_ep0.csv'), splits on '_ep' to get the ID.
+    For other files (e.g., 'grace_t_6_metadata.json'), removes known suffixes.
+    """
+    # For episode files, split on '_ep'
+    if '_ep' in filename:
+        id_part = filename.split('_ep')[0]
+    else:
+        # Remove known suffixes for non-episode files
+        known_suffixes = ['_metadata', '_globals', '_multiplayer_metrics']
+        id_part = filename
+        for suffix in known_suffixes:
+            if id_part.endswith(suffix):
+                id_part = id_part[:-len(suffix)]
+                break
+    return id_part
 
 def get_max_episode():
     """
@@ -103,20 +122,20 @@ def categorize_subjects(id_to_teammate=None):
     start_scene_ids = set()
     if start_scene_dir.exists():
         for file_path in start_scene_dir.glob("*"):
-            id_part = file_path.stem.split("_")[0]
+            id_part = extract_subject_id(file_path.stem)
             start_scene_ids.add(id_part)
     
     cramped_room_ids = set()
     if cramped_room_dir.exists():
         for file_path in cramped_room_dir.glob("*"):
             if file_path.is_file():
-                id_part = file_path.stem.split("_")[0]
+                id_part = extract_subject_id(file_path.stem)
                 cramped_room_ids.add(id_part)
     
     end_scene_ids = set()
     if end_scene_dir.exists():
         for file_path in end_scene_dir.glob("*"):
-            id_part = file_path.stem.split("_")[0]
+            id_part = extract_subject_id(file_path.stem)
             end_scene_ids.add(id_part)
     
     # Get episode data
