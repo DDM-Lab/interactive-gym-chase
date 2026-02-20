@@ -2,7 +2,7 @@ from pathlib import Path
 import csv
 from quit_initiator_detector import detect_quit_initiator
 
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-run-6"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-run-9-and-10"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"
 experiment_type = "human-only"

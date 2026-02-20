@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 folder_a = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-run-7\cramped_room_hh"
-folder_b = r"C:\Users\groessli\human-only-data-2-18-26\0216-human-human-3ac037b\cramped_room_hh"
+folder_b = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-run-8\cramped_room_hh"
 
 def extract_participant_id(filename):
     """
