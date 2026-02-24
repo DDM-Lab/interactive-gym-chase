@@ -12,7 +12,7 @@ import pandas as pd
 import os
 from pathlib import Path
 
-folder_list = ["pilot_2_aggregated_data", "post_pilot", "run_1_aws", "run_1_Janus", "run_2", "run_2_9", "run_2_9_t2", "run_3_and_4", "run_5", "run_6", "run_7"]
+folder_list = ["pilot_2_aggregated_data", "post_pilot", "run_1_aws", "run_1_Janus", "run_2", "run_2_9", "run_2_9_t2", "run_3_and_4", "run_5", "run_6", "run_7", "run_8", "run_9_and_10"]
 
 file_path = "C:\\Users\\groessli\\Documents\\GitHub\\interactive-gym-chase\\data_preprocessing\\human_only\\aggregated_data"
 
@@ -50,9 +50,11 @@ for folder in folder_list:
             unique_team_ids = completed_df['team_id'].unique()
             for team_id in unique_team_ids:
                 if pd.notna(team_id):  # Handle NaN values
+                    # Get the compensation value (should be the same for both team members)
+                    compensation = completed_df[completed_df['team_id'] == team_id]['compensation'].iloc[0]
                     if team_id not in completed_teams:
-                        completed_teams[team_id] = []
-                    completed_teams[team_id].append(folder)
+                        completed_teams[team_id] = {'folders': [], 'compensation': compensation}
+                    completed_teams[team_id]['folders'].append(folder)
         
         except Exception as e:
             print(f"Error reading {csv_path}: {e}")
@@ -78,10 +80,11 @@ output_df.to_csv(output_path, index=False)
 
 # Create output dataframe for completed teams
 completed_data = []
-for team_id, folders in completed_teams.items():
+for team_id, info in completed_teams.items():
     completed_data.append({
         'team_id': team_id,
-        'folders_found': '; '.join(folders)
+        'compensation': info['compensation'],
+        'folders_found': '; '.join(info['folders'])
     })
 
 completed_df_output = pd.DataFrame(completed_data)
@@ -98,4 +101,7 @@ print(f"Found {len(output_df)} unique unpaired subjects")
 print(f"Output saved to: {output_path}")
 print(f"\nCompleted teams summary:")
 print(f"Total number of completed teams: {len(completed_teams)}")
+# Count teams that received a bonus (compensation > 0)
+bonus_teams = sum(1 for team_id, info in completed_teams.items() if info['compensation'] > 0)
+print(f"Number of teams who received a bonus: {bonus_teams}")
 print(f"Completed teams output saved to: {completed_teams_path}")

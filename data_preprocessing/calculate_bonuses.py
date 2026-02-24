@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 
 # Configuration
 experiment_type = "human-only"  # Change to "AI-only" or "Human-AI" as needed
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_8"
-fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_8\generated_figs"
-aligned_team_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_8\aligned_team_data"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_9_and_10"
+fig_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_9_and_10\generated_figs"
+aligned_team_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_9_and_10\aligned_team_data"
 
 # Category folder names
 CATEGORY_FOLDERS = {
