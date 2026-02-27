@@ -12,7 +12,7 @@ import pandas as pd
 import os
 from pathlib import Path
 
-folder_list = ["pilot_2_aggregated_data", "post_pilot", "run_1_aws", "run_1_Janus", "run_2", "run_2_9", "run_2_9_t2", "run_3_and_4", "run_5", "run_6", "run_7", "run_8", "run_9_and_10"]
+folder_list = ["pilot_2_aggregated_data", "post_pilot", "run_1_aws", "run_1_Janus", "run_2", "run_2_9", "run_2_9_t2", "run_3_and_4", "run_5", "run_6", "run_7", "run_8", "run_9_and_10", "run_11_to_14"]
 
 file_path = "C:\\Users\\groessli\\Documents\\GitHub\\interactive-gym-chase\\data_preprocessing\\human_only\\aggregated_data"
 
