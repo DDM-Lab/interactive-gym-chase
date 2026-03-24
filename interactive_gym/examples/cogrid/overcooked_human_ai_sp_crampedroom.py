@@ -1,6 +1,5 @@
 ## TO RUN THIS FILE, RUN THIS COMMAND: 
-# python interactive_gym/examples/cogrid/overcooked_human_ai_sp_crampedroom.py --port 5703     
-# python -m interactive_gym.examples.cogrid.overcooked_human_ai_sp_crampedroom     
+# python -m interactive_gym.examples.cogrid.overcooked_human_ai_sp_crampedroom  --port 5703      
 from __future__ import annotations
 
 import eventlet
