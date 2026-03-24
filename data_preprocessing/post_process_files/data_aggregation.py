@@ -2,15 +2,19 @@ import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 import csv
+import re
 from quit_initiator_detector import detect_quit_initiator
 
-#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-data_run_1"
-#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-only-run-1-aws"
-agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\human_only\aggregated_data\run_11_to_14"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-Human Speed-HH\Data\FullRuns\human-run-11-to-14"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI-Speed\Data\Human-AI-Condition\AI-Speed-5FPS"
+agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\AI_speed\aggregated_data\AI_speed_5"
+
 # Parameter: "human-only", "AI-only", or "Human-AI"
-experiment_type = "human-only"
+experiment_type = "human-ai"
 suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
+is_human_ai = experiment_type.lower() == "human-ai"
+
+# MTurk ID pattern validation (for human-ai condition)
+MTURK_ID_PATTERN = re.compile(r'^[A-Z0-9]{12,}$')  # MTurk IDs are 12+ alphanumeric chars
 
 # Category folder names
 CATEGORY_FOLDERS = {
@@ -39,6 +43,151 @@ def extract_subject_id(filename):
                 id_part = id_part[:-len(suffix)]
                 break
     return id_part
+
+def is_valid_mturk_id(subject_id):
+    """
+    Validate if a subject ID follows MTurk format (12+ alphanumeric uppercase).
+    Used for human-ai condition.
+    """
+    return MTURK_ID_PATTERN.match(subject_id) is not None
+
+def get_human_ai_validation_state(subject_id, max_episode_per_subject, end_scene_ids, overall_max_episode):
+    """
+    For Human-AI condition, determine 5-state validation status:
+    - State 1: ✓✓ Has all episodes AND in end_completion_code_scene
+    - State 2: ✓✗ Has all episodes but NOT in end_completion_code_scene
+    - State 3: ✗✓ NOT all episodes but IS in end_completion_code_scene
+    - State 4: ✗✗ NO episode data AND not in end_completion_code_scene (never started)
+    - State 5: ✗✗ Has some episodes (< max) AND not in end_completion_code_scene (quit midway)
+    
+    Args:
+        subject_id: Subject's ID
+        max_episode_per_subject: Dict mapping subject ID to their max episode number
+        end_scene_ids: Set of subject IDs with completion codes
+        overall_max_episode: The maximum episode number across all subjects
+    
+    Returns tuple: (state, state_name, has_max_ep, has_completion_code, max_episode)
+    """
+    max_ep = max_episode_per_subject.get(subject_id, -1)
+    has_max_ep = max_ep >= overall_max_episode
+    has_completion_code = subject_id in end_scene_ids
+    
+    if has_max_ep and has_completion_code:
+        return (1, "COMPLETED_SUCCESSFULLY", has_max_ep, has_completion_code, max_ep)
+    elif has_max_ep and not has_completion_code:
+        return (2, "INCOMPLETE_DATA_SUSPICIOUS", has_max_ep, has_completion_code, max_ep)
+    elif not has_max_ep and has_completion_code:
+        return (3, "INCOMPLETE_PLAY_SUSPICIOUS", has_max_ep, has_completion_code, max_ep)
+    elif max_ep == -1:
+        # No episode data at all
+        return (4, "NO_DATA_NEVER_STARTED", has_max_ep, has_completion_code, max_ep)
+    else:
+        # Has some episodes but less than max
+        return (5, "INCOMPLETE_QUIT_MIDWAY", has_max_ep, has_completion_code, max_ep)
+
+def categorize_subjects_human_ai():
+    """
+    Categorize human-ai subjects based on 5 states from validation logic.
+    Maps states to categories:
+    - State 4 (NO_DATA_NEVER_STARTED) → Category 1 (placeholder)
+    - State 3 (INCOMPLETE_PLAY_SUSPICIOUS, no episode data) → Category 1 (placeholder)
+    - State 3/5 (has episode data) → Category 3 (aggregate)
+    - State 5 (INCOMPLETE_QUIT_MIDWAY) → Category 3 (aggregate, partial data)
+    - State 1, 2 (all episode data) → Category 4 (aggregate)
+    
+    Returns dict with category numbers as keys and lists of subject IDs as values.
+    """
+    sp_0_dir = Path(data_dir) / "cramped_room_sp_0"
+    end_scene_dir = Path(data_dir) / "end_completion_code_scene"
+    
+    # Get IDs and episode data
+    sp_0_ids = set()
+    max_episode_per_subject = {}
+    if sp_0_dir.exists():
+        for csv_file in sp_0_dir.glob("*.csv"):
+            filename = csv_file.stem
+            id_part = filename.split("_")[0]
+            sp_0_ids.add(id_part)
+            
+            # Extract episode number if present
+            parts = filename.split("_")
+            if len(parts) > 1:
+                try:
+                    ep_num = int(parts[-1])
+                    if id_part not in max_episode_per_subject:
+                        max_episode_per_subject[id_part] = ep_num
+                    else:
+                        max_episode_per_subject[id_part] = max(max_episode_per_subject[id_part], ep_num)
+                except ValueError:
+                    pass
+    
+    # Get end scene IDs
+    end_scene_ids = set()
+    if end_scene_dir.exists():
+        for file_path in end_scene_dir.glob("*"):
+            filename = file_path.stem
+            id_part = filename.split("_")[0]
+            end_scene_ids.add(id_part)
+    
+    # Calculate overall max episode
+    overall_max_episode = max(max_episode_per_subject.values()) if max_episode_per_subject else 0
+    
+    # Get validation states for all subjects
+    states = {1: [], 2: [], 3: [], 4: [], 5: []}
+    all_ids = sp_0_ids.union(end_scene_ids)
+    
+    for subject_id in sorted(all_ids):
+        state, state_name, has_max_ep, has_completion, max_ep = get_human_ai_validation_state(
+            subject_id, max_episode_per_subject, end_scene_ids, overall_max_episode
+        )
+        states[state].append({
+            "id": subject_id,
+            "state_name": state_name,
+            "has_max_ep": has_max_ep,
+            "has_completion": has_completion,
+            "max_episode": max_ep
+        })
+    
+    # Map states to aggregation categories
+    category_1 = []  # No data
+    category_2 = []  # No data (none for human-ai, already in category 1)
+    category_3 = []  # Has some episodes
+    category_4 = []  # Has all episodes
+    category_5 = []  # Uncategorized
+    
+    # State 4: No data → Category 1
+    for item in states[4]:
+        category_1.append(item["id"])
+    
+    # State 5: Has some episodes → Category 3
+    for item in states[5]:
+        category_3.append(item["id"])
+    
+    # State 3: Mixed (some have data, some don't) → Check if has episodes
+    # We'll handle this in aggregation by checking subject_files
+    for item in states[3]:
+        # Will check if they have episode files; if yes→Category 3, if no→Category 1
+        if item["max_episode"] >= 0:
+            category_3.append(item["id"])
+        else:
+            category_1.append(item["id"])
+    
+    # State 2 & 1: Both have all episodes → Category 4
+    for item in states[1]:
+        category_4.append(item["id"])
+    for item in states[2]:
+        category_4.append(item["id"])
+    
+    return {
+        1: sorted(category_1),
+        2: sorted(category_2),
+        3: sorted(category_3),
+        4: sorted(category_4),
+        5: sorted(category_5),
+        'max_episode_per_subject': max_episode_per_subject,
+        'overall_max_episode': overall_max_episode,
+        'validation_states': states
+    }
 
 def get_max_episode():
     """
@@ -220,18 +369,189 @@ def categorize_subjects(id_to_teammate=None):
     }
 
 
-def aggregate_subject_data():
+def aggregate_subject_data_human_ai():
     """
-    Aggregate data for subjects based on 5 categories:
-    Category 1: Failed to reach main session (placeholder)
-    Category 2: Failed to play main session (placeholder)
-    Category 3: Team ended during main session (aggregate episode data)
-    Category 4: Completed experiment (aggregate episode data)
-    Category 5: Uncategorized (placeholder)
+    Aggregate data for human-ai condition based on 5 categories.
+    Categories based on validation state mapping:
+    - Category 1: No data (State 4, State 3 without episodes)
+    - Category 2: No episode data - not used for human-ai (included in Category 1)
+    - Category 3: Has some episodes but not all (State 5, State 3 with episodes)
+    - Category 4: Has all episodes (State 1, State 2)
+    - Category 5: Uncategorized (not used for human-ai)
     
     Returns:
         dict: Dictionary with category info and subject DataFrames
     """
+    sp_0_dir = Path(data_dir) / "cramped_room_sp_0"
+    base_agg_dir = Path(agg_data_dir)
+    
+    if not sp_0_dir.exists():
+        raise FileNotFoundError(f"Directory not found: {sp_0_dir}")
+    
+    # Create base aggregated data directory and category subdirectories
+    base_agg_dir.mkdir(parents=True, exist_ok=True)
+    for category_num, folder_name in CATEGORY_FOLDERS.items():
+        (base_agg_dir / folder_name).mkdir(parents=True, exist_ok=True)
+    
+    # Get categorized subjects for human-ai
+    categories = categorize_subjects_human_ai()
+    max_episode_per_subject = categories['max_episode_per_subject']
+    overall_max_episode = categories['overall_max_episode']
+    validation_states = categories['validation_states']
+    
+    # Dictionary to store all CSV files grouped by subject ID
+    subject_files = defaultdict(list)
+    
+    # Collect all episode CSV files (same pattern as categorize_subjects_human_ai)
+    if sp_0_dir.exists():
+        for csv_file in sorted(sp_0_dir.glob("*.csv")):
+            filename = csv_file.stem  # Remove .csv extension
+            
+            # Extract subject ID and episode number
+            parts = filename.split("_")
+            subject_id = parts[0]
+            
+            # Determine episode number
+            if len(parts) == 1:
+                # No underscore: this is the base episode (episode 0)
+                episode_num = 0
+            else:
+                # Has underscore(s): extract the episode number from the last part
+                try:
+                    episode_num = int(parts[-1])
+                except ValueError:
+                    # If last part is not a number, this might be a metadata file
+                    continue
+            
+            subject_files[subject_id].append((episode_num, csv_file))
+    
+    subject_dataframes = {}
+    
+    # Get a mapping of subject ID to state for consistent metadata
+    subject_to_state = {}
+    for state_num in [1, 2, 3, 4, 5]:
+        for item in validation_states[state_num]:
+            subject_to_state[item["id"]] = item["state_name"]
+    
+    # Process Category 4: Completed experiment (has all episodes)
+    for subject_id in categories[4]:
+        if subject_id not in subject_files:
+            continue
+            
+        file_list = subject_files[subject_id]
+        file_list.sort(key=lambda x: x[0])
+        
+        dfs = []
+        for episode_num, csv_file in file_list:
+            df = pd.read_csv(csv_file)
+            
+            if 'episode_num' not in df.columns:
+                df['episode_num'] = episode_num
+            else:
+                if df['episode_num'].isna().all() or (df['episode_num'] == '').all():
+                    df['episode_num'] = episode_num
+            
+            dfs.append(df)
+        
+        subject_df = pd.concat(dfs, ignore_index=True)
+        subject_df['status'] = subject_to_state.get(subject_id, 'completed')
+        subject_df['category'] = 4
+        
+        subject_dataframes[subject_id] = subject_df
+        
+        output_file = base_agg_dir / CATEGORY_FOLDERS[4] / f"{subject_id}_aggregated.csv"
+        subject_df.to_csv(output_file, index=False)
+    
+    # Process Category 3: Has some episodes but incomplete
+    for subject_id in categories[3]:
+        if subject_id not in subject_files:
+            continue
+            
+        file_list = subject_files[subject_id]
+        file_list.sort(key=lambda x: x[0])
+        
+        dfs = []
+        for episode_num, csv_file in file_list:
+            df = pd.read_csv(csv_file)
+            
+            if 'episode_num' not in df.columns:
+                df['episode_num'] = episode_num
+            else:
+                if df['episode_num'].isna().all() or (df['episode_num'] == '').all():
+                    df['episode_num'] = episode_num
+            
+            dfs.append(df)
+        
+        subject_df = pd.concat(dfs, ignore_index=True)
+        subject_df['status'] = subject_to_state.get(subject_id, 'incomplete')
+        subject_df['category'] = 3
+        max_ep = max_episode_per_subject.get(subject_id, 0)
+        subject_df['max_episode_reached'] = max_ep
+        
+        subject_dataframes[subject_id] = subject_df
+        
+        output_file = base_agg_dir / CATEGORY_FOLDERS[3] / f"{subject_id}_aggregated.csv"
+        subject_df.to_csv(output_file, index=False)
+    
+    # Process Category 1: No episode data (placeholder)
+    for subject_id in categories[1]:
+        placeholder_df = pd.DataFrame({
+            'status': [subject_to_state.get(subject_id, 'no_data')],
+            'category': [1]
+        })
+        
+        subject_dataframes[subject_id] = placeholder_df
+        
+        output_file = base_agg_dir / CATEGORY_FOLDERS[1] / f"{subject_id}_aggregated.csv"
+        placeholder_df.to_csv(output_file, index=False)
+    
+    # Categories 2 and 5 are empty for human-ai, but process them anyway for consistency
+    for subject_id in categories[2]:
+        placeholder_df = pd.DataFrame({
+            'status': [subject_to_state.get(subject_id, 'failed_to_play_main_session')],
+            'category': [2]
+        })
+        
+        subject_dataframes[subject_id] = placeholder_df
+        
+        output_file = base_agg_dir / CATEGORY_FOLDERS[2] / f"{subject_id}_aggregated.csv"
+        placeholder_df.to_csv(output_file, index=False)
+    
+    for subject_id in categories[5]:
+        placeholder_df = pd.DataFrame({
+            'status': ['uncategorized'],
+            'category': [5]
+        })
+        
+        subject_dataframes[subject_id] = placeholder_df
+        
+        output_file = base_agg_dir / CATEGORY_FOLDERS[5] / f"{subject_id}_aggregated.csv"
+        placeholder_df.to_csv(output_file, index=False)
+    
+    return {
+        'subject_dataframes': subject_dataframes,
+        'categories': categories,
+        'overall_max_episode': overall_max_episode
+    }
+
+
+def aggregate_subject_data():
+    """
+    Aggregate data for subjects based on 5 categories.
+    For human-ai condition: delegates to aggregate_subject_data_human_ai()
+    For human-only/AI-only: Categories:
+    - Category 1: Failed to reach main session (placeholder)
+    - Category 2: Failed to play main session (placeholder)
+    - Category 3: Team ended during main session (aggregate episode data)
+    - Category 4: Completed experiment (aggregate episode data)
+    - Category 5: Uncategorized (placeholder)
+    
+    Returns:
+        dict: Dictionary with category info and subject DataFrames
+    """
+    # Branch based on experiment type
+    if is_human_ai:
+        return aggregate_subject_data_human_ai()
     
     cramped_room_dir = Path(data_dir) / f"cramped_room_{suffix}"
     base_agg_dir = Path(agg_data_dir)
@@ -906,15 +1226,30 @@ if __name__ == "__main__":
     categories = result['categories']
     overall_max_episode = result['overall_max_episode']
     
-    # Perform time alignment analysis for categories 3 and 4
-    alignment_stats, episode_coverage_report = align_team_timesteps(Path(agg_data_dir), categories)
-    
-    # Report episode coverage disparities with category information
-    report_episode_coverage(episode_coverage_report, categories)
-    
-    # Report team rewards from aligned data
-    report_team_rewards(episode_coverage_report)
-    
-    # Validate aligned data integrity
-    validate_aligned_data(episode_coverage_report, categories)
+    # Team-based analysis only applies to human-only and AI-only conditions
+    if not is_human_ai:
+        # Perform time alignment analysis for categories 3 and 4
+        alignment_stats, episode_coverage_report = align_team_timesteps(Path(agg_data_dir), categories)
+        
+        # Report episode coverage disparities with category information
+        report_episode_coverage(episode_coverage_report, categories)
+        
+        # Report team rewards from aligned data
+        report_team_rewards(episode_coverage_report)
+        
+        # Validate aligned data integrity
+        validate_aligned_data(episode_coverage_report, categories)
+    else:
+        print("\n" + "=" * 80)
+        print("HUMAN-AI CONDITION: AGGREGATION COMPLETE")
+        print("=" * 80)
+        print(f"Total aggregated subjects: {len(subject_dfs)}")
+        print(f"Max episode reached: {overall_max_episode}")
+        print(f"Output directory: {agg_data_dir}")
+        print("\nCategory summary:")
+        for cat_num in [1, 2, 3, 4, 5]:
+            count = len(categories[cat_num])
+            if count > 0:
+                print(f"  Category {cat_num}: {count} subjects")
+        print("=" * 80 + "\n")
 

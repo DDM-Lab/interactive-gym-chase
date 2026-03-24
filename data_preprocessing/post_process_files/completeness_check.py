@@ -20,8 +20,7 @@ suffix = "hh" if experiment_type.lower() == "human-only" else "sp"
 is_human_ai = experiment_type.lower() == "human-ai"
 is_team_based = not is_human_ai
 
-# For human-AI, expected number of episodes is always 20 (0-19)
-HUMAN_AI_MAX_EPISODES = 19
+# MTurk ID pattern validation
 MTURK_ID_PATTERN = re.compile(r'^[A-Z0-9]{12,}$')  # MTurk IDs are 12+ alphanumeric chars
 
 
@@ -53,34 +52,40 @@ def is_valid_mturk_id(subject_id):
     return MTURK_ID_PATTERN.match(subject_id) is not None
 
 
-def get_human_ai_validation_state(subject_id, max_episode_per_subject, end_scene_ids):
+def get_human_ai_validation_state(subject_id, max_episode_per_subject, end_scene_ids, overall_max_episode):
     """
-    For Human-AI condition, determine 6-state validation status:
-    - State 1: ✓✓ Has episode 19 AND in end_completion_code_scene
-    - State 2: ✓✗ Has episode 19 but NOT in end_completion_code_scene
-    - State 3: ✗✓ NOT in episode 19 but IS in end_completion_code_scene
-    - State 4a: ✗✗ NO episode data AND not in end_completion_code_scene (never started)
-    - State 4b: ✗✗ Has some episodes (< 19) AND not in end_completion_code_scene (quit midway)
+    For Human-AI condition, determine 5-state validation status:
+    - State 1: ✓✓ Has all episodes AND in end_completion_code_scene
+    - State 2: ✓✗ Has all episodes but NOT in end_completion_code_scene
+    - State 3: ✗✓ NOT all episodes but IS in end_completion_code_scene
+    - State 4: ✗✗ NO episode data AND not in end_completion_code_scene (never started)
+    - State 5: ✗✗ Has some episodes (< max) AND not in end_completion_code_scene (quit midway)
     - (Invalid: flagged as non-MTurk format)
     
-    Returns tuple: (state, state_name, has_ep19, has_completion_code, max_episode)
+    Args:
+        subject_id: Subject's ID
+        max_episode_per_subject: Dict mapping subject ID to their max episode number
+        end_scene_ids: Set of subject IDs with completion codes
+        overall_max_episode: The maximum episode number across all subjects
+    
+    Returns tuple: (state, state_name, has_max_ep, has_completion_code, max_episode)
     """
     max_ep = max_episode_per_subject.get(subject_id, -1)
-    has_ep19 = max_ep >= HUMAN_AI_MAX_EPISODES
+    has_max_ep = max_ep >= overall_max_episode
     has_completion_code = subject_id in end_scene_ids
     
-    if has_ep19 and has_completion_code:
-        return (1, "COMPLETED_SUCCESSFULLY", has_ep19, has_completion_code, max_ep)
-    elif has_ep19 and not has_completion_code:
-        return (2, "INCOMPLETE_DATA_SUSPICIOUS", has_ep19, has_completion_code, max_ep)
-    elif not has_ep19 and has_completion_code:
-        return (3, "INCOMPLETE_PLAY_SUSPICIOUS", has_ep19, has_completion_code, max_ep)
+    if has_max_ep and has_completion_code:
+        return (1, "COMPLETED_SUCCESSFULLY", has_max_ep, has_completion_code, max_ep)
+    elif has_max_ep and not has_completion_code:
+        return (2, "INCOMPLETE_DATA_SUSPICIOUS", has_max_ep, has_completion_code, max_ep)
+    elif not has_max_ep and has_completion_code:
+        return (3, "INCOMPLETE_PLAY_SUSPICIOUS", has_max_ep, has_completion_code, max_ep)
     elif max_ep == -1:
         # No episode data at all
-        return (4, "NO_DATA_NEVER_STARTED", has_ep19, has_completion_code, max_ep)
+        return (4, "NO_DATA_NEVER_STARTED", has_max_ep, has_completion_code, max_ep)
     else:
-        # Has some episodes but less than 19
-        return (5, "INCOMPLETE_QUIT_MIDWAY", has_ep19, has_completion_code, max_ep)
+        # Has some episodes but less than max
+        return (5, "INCOMPLETE_QUIT_MIDWAY", has_max_ep, has_completion_code, max_ep)
 
 
 def analyze_human_ai_completeness():
@@ -121,7 +126,10 @@ def analyze_human_ai_completeness():
             id_part = filename.split("_")[0]
             end_scene_ids.add(id_part)
     
-    # Categorize subjects by 4-state validation
+    # Calculate overall max episode
+    overall_max_episode = max(max_episode_per_subject.values()) if max_episode_per_subject else 0
+    
+    # Categorize subjects by 5-state validation
     states = {1: [], 2: [], 3: [], 4: [], 5: []}
     invalid_ids = []
     
@@ -131,13 +139,13 @@ def analyze_human_ai_completeness():
             invalid_ids.append(subject_id)
             continue
         
-        state, state_name, has_ep19, has_completion, max_ep = get_human_ai_validation_state(
-            subject_id, max_episode_per_subject, end_scene_ids
+        state, state_name, has_max_ep, has_completion, max_ep = get_human_ai_validation_state(
+            subject_id, max_episode_per_subject, end_scene_ids, overall_max_episode
         )
         states[state].append({
             "id": subject_id,
             "state_name": state_name,
-            "has_ep19": has_ep19,
+            "has_max_ep": has_max_ep,
             "has_completion": has_completion,
             "max_episode": max_ep
         })
@@ -148,7 +156,8 @@ def analyze_human_ai_completeness():
         "total_valid_ids": sum(len(states[i]) for i in [1, 2, 3, 4, 5]),
         "sp_0_ids": sp_0_ids,
         "end_scene_ids": end_scene_ids,
-        "max_episode_per_subject": max_episode_per_subject
+        "max_episode_per_subject": max_episode_per_subject,
+        "overall_max_episode": overall_max_episode
     }
 
 
@@ -429,7 +438,6 @@ if __name__ == "__main__":
         print("=" * 80)
         print(f"Data Directory: {data_dir}")
         print(f"Experiment Type: {experiment_type}")
-        print(f"Expected Max Episodes: {HUMAN_AI_MAX_EPISODES}")
         
         results = analyze_human_ai_completeness()
         
@@ -437,6 +445,7 @@ if __name__ == "__main__":
         invalid_ids = results["invalid_ids"]
         total_valid = results["total_valid_ids"]
         
+        print(f"Expected Max Episodes: {results['overall_max_episode']}")
         print(f"\nTotal Valid MTurk IDs found: {total_valid}")
         print(f"Invalid IDs (non-MTurk format): {len(invalid_ids)}")
         if invalid_ids:
@@ -447,7 +456,7 @@ if __name__ == "__main__":
         print("STATE 1: ✓✓ COMPLETED SUCCESSFULLY")
         print("-" * 80)
         print(f"Count: {len(states[1])}")
-        print(f"Criteria: Has episode {HUMAN_AI_MAX_EPISODES} AND in end_completion_code_scene")
+        print(f"Criteria: Has all episodes (0-{results['overall_max_episode']}) AND in end_completion_code_scene")
         if states[1]:
             print("\nSubject IDs:")
             for item in states[1]:
@@ -457,10 +466,10 @@ if __name__ == "__main__":
         
         # State 2: ✓✗ Has data but no completion code
         print("\n" + "-" * 80)
-        print("STATE 2: ✓✗ HAS EPISODE DATA BUT NO COMPLETION CODE (suspicious)")
+        print("STATE 2: ✓✗ HAS ALL EPISODE DATA BUT NO COMPLETION CODE (suspicious)")
         print("-" * 80)
-        print(f"Count: {len(states[2])}")
-        print(f"Criteria: Has episode {HUMAN_AI_MAX_EPISODES} but NOT in end_completion_code_scene")
+        print(f"Count: {len(states[2])}") 
+        print(f"Criteria: Has all episodes (0-{results['overall_max_episode']}) but NOT in end_completion_code_scene")
         if states[2]:
             print("\nSubject IDs:")
             for item in states[2]:
@@ -473,7 +482,7 @@ if __name__ == "__main__":
         print("STATE 3: ✗✓ COMPLETION CODE BUT INCOMPLETE DATA (suspicious)")
         print("-" * 80)
         print(f"Count: {len(states[3])}")
-        print(f"Criteria: In end_completion_code_scene but NOT episode {HUMAN_AI_MAX_EPISODES}")
+        print(f"Criteria: In end_completion_code_scene but NOT all episodes (< {results['overall_max_episode']})")
         if states[3]:
             print("\nSubject IDs:")
             for item in states[3]:
@@ -508,7 +517,7 @@ if __name__ == "__main__":
         print("STATE 5: ✗✗ QUIT MIDWAY (INCOMPLETE EPISODES)")
         print("-" * 80)
         print(f"Count: {len(states[5])}")
-        print(f"Criteria: Has some episodes (< {HUMAN_AI_MAX_EPISODES}) AND not in end_completion_code_scene")
+        print(f"Criteria: Has some episodes (< {results['overall_max_episode']}) AND not in end_completion_code_scene")
         if states[5]:
             print(f"\n{len(states[5])} subject ID(s) started but abandoned before completion")
             print("\nSubject IDs:")
@@ -520,7 +529,7 @@ if __name__ == "__main__":
         
         # COMPREHENSIVE VIEW: All subjects with incomplete episodes
         print("\n" + "-" * 80)
-        print(f"COMPREHENSIVE: ALL INCOMPLETE SUBJECTS (< {HUMAN_AI_MAX_EPISODES} episodes)")
+        print(f"COMPREHENSIVE: ALL INCOMPLETE SUBJECTS (< {results['overall_max_episode']} episodes)")
         print("-" * 80)
         incomplete_subjects = []
         for state_num in [3, 5]:
@@ -528,7 +537,7 @@ if __name__ == "__main__":
         incomplete_subjects.sort(key=lambda x: x['max_episode'], reverse=True)
         
         print(f"Count: {len(incomplete_subjects)}")
-        print(f"Criteria: All subjects with less than {HUMAN_AI_MAX_EPISODES} episodes (regardless of completion code)")
+        print(f"Criteria: All subjects with less than {results['overall_max_episode']} episodes (regardless of completion code)")
         if incomplete_subjects:
             print("\nSubject IDs (sorted by max episode reached):")
             for item in incomplete_subjects:
