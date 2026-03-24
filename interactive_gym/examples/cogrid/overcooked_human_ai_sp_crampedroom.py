@@ -1,3 +1,6 @@
+## TO RUN THIS FILE, RUN THIS COMMAND: 
+# python interactive_gym/examples/cogrid/overcooked_human_ai_sp_crampedroom.py --port 5703     
+# python -m interactive_gym.examples.cogrid.overcooked_human_ai_sp_crampedroom     
 from __future__ import annotations
 
 import eventlet
@@ -90,8 +93,8 @@ def create_cramped_room_scenes_with_frame_skip(frame_skip_value: int):
         scenes=episodes
     )
 
-# Create scene wrapper with fixed frame skip value of 1
-cramped_room_scenes = create_cramped_room_scenes_with_frame_skip(1)
+# Create scene wrapper with fixed frame skip value of 5
+cramped_room_scenes = create_cramped_room_scenes_with_frame_skip(5)
 
 stager = stager.Stager(
     scenes=[
