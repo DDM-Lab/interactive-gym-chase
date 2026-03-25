@@ -5,7 +5,7 @@ import csv
 import re
 from quit_initiator_detector import detect_quit_initiator
 
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI-Speed\Data\Human-AI-Condition\AI-Speed-5FPS"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-5FPS-Speed\Data\individual_runs\sp_5_human_ai_data_3_24"
 agg_data_dir = r"C:\Users\groessli\Documents\GitHub\interactive-gym-chase\data_preprocessing\AI_speed\aggregated_data\AI_speed_5"
 
 # Parameter: "human-only", "AI-only", or "Human-AI"

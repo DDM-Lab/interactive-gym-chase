@@ -8,8 +8,8 @@ from quit_initiator_detector import detect_quit_initiator
 # ============================================================================
 # Set data_dir to the path containing your experiment data
 # Example: r"G:\.shortcut-targets-by-id\...\Data\FullRuns\data"
-data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI-Speed\Data\Human-AI-Condition\AI-Speed-5FPS"
-
+#data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-AI-Speed\Data\Human-AI-Condition\AI-Speed-5FPS"
+data_dir = r"G:\.shortcut-targets-by-id\1n7peZVybcw0B7smQ0VFfiXWcIbYjxZ96\2025ControllableCollaborationChaseGrace\Experiments\2025-ControllableCollaboration-5FPS-Speed\Data\individual_runs\sp_5_human_ai_data_3_24"
 # Set experiment_type to one of: "human-only", "AI-only", "Human-AI"
 experiment_type = "human-ai"
 
