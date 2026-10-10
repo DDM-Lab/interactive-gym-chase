@@ -6,7 +6,7 @@ export class RemoteGame {
     constructor(config) {
         this.setAttributes(config);
         this.installed_packages = [];
-        this.initialize(); 
+        this.initialize();
     }
 
     setAttributes(config) {
@@ -81,10 +81,10 @@ env
 
             if (new_packages.length > 0) {
                 await this.micropip.install(new_packages);
-                this.installed_packages.push(...new_packages);    
+                this.installed_packages.push(...new_packages);
             }
         }
-    
+
         // The code executed here must instantiate an environment `env`
         const env = await this.pyodide.runPythonAsync(`
 import js
@@ -113,8 +113,12 @@ env
 obs, infos = env.reset()
 render_state = env.render()
 
-# TODO(chase): make this more generic
-obs = {k: {kk: vv.reshape(-1).astype(np.float32) for kk, vv in v.items()} for k, v in obs.items()}
+# Observations may be per-agent dicts of features or flat per-agent arrays.
+import numpy as np
+if isinstance([*obs.values()][0], dict):
+    obs = {k: {kk: vv.reshape(-1).astype(np.float32) for kk, vv in v.items()} for k, v in obs.items()}
+else:
+    obs = {k: v.reshape(-1).astype(np.float32) for k, v in obs.items()}
 
 obs, infos, render_state
         `);
@@ -149,7 +153,11 @@ ${this.config.on_game_step_code}
 agent_actions = {int(k): v for k, v in ${pyActions}.items()}
 obs, rewards, terminateds, truncateds, infos = env.step(agent_actions)
 render_state = env.render()
-obs = {k: {kk: vv.reshape(-1).astype(np.float32) for kk, vv in v.items()} for k, v in obs.items()}
+import numpy as np
+if isinstance([*obs.values()][0], dict):
+    obs = {k: {kk: vv.reshape(-1).astype(np.float32) for kk, vv in v.items()} for k, v in obs.items()}
+else:
+    obs = {k: v.reshape(-1).astype(np.float32) for k, v in obs.items()}
 obs, rewards, terminateds, truncateds, infos, render_state
         `);
         // const endTime = performance.now();
@@ -157,7 +165,7 @@ obs, rewards, terminateds, truncateds, infos, render_state
 
         // Convert everything from python objects to JS objects
         let [obs, rewards, terminateds, truncateds, infos, render_state] = await this.pyodide.toPy(result).toJs();
-        
+
         for (let [key, value] of rewards.entries()) {
             this.cumulative_rewards[key] += value;
         }
@@ -182,7 +190,7 @@ obs, rewards, terminateds, truncateds, infos, render_state
             } else {
                 this.shouldReset = true;
             }
-            
+
         }
 
         return [obs, rewards, terminateds, truncateds, infos, render_state]

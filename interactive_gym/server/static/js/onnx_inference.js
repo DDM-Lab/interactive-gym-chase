@@ -31,38 +31,45 @@ async function inferenceONNXPolicy(policyID, observation) {
         }
     }
 
-    
+
 
 
     // Ensure observation is a Float32Array
-    if (typeof observation === 'object' && !Array.isArray(observation)) {
-        // If observation is a dictionary
+    if (ArrayBuffer.isView(observation)) {
+        // Already a TypedArray (e.g., Float32Array from Pyodide toJs())
+        if (!(observation instanceof Float32Array)) {
+            observation = new Float32Array(observation);
+        }
+    } else if (Array.isArray(observation)) {
+        // Plain JS array
+        observation = new Float32Array(observation);
+    } else if (typeof observation === 'object') {
+        // Dictionary of arrays
         for (let key in observation) {
             if (Array.isArray(observation[key])) {
                 observation[key] = new Float32Array(observation[key]);
             }
         }
-    } else if (Array.isArray(observation)) {
-        // If observation is already an array
-        observation = new Float32Array(observation);
     } else {
         throw new Error('Observation must be either an object or an array');
     }
 
     // If there are any image observations, make sure that they are appropriately shaped
     // toJs will return an Array full of Array objects, but we need a single 3-D array
-    
-    // Load the model if not already loaded
+
+    // Load the model if not already loaded. Cache the promise rather than the
+    // session: the policy is queried again before the first load finishes, and
+    // ORT's wasm backend can't be initialized by two concurrent create() calls.
     if (!loadedModels[policyID]) {
-        loadedModels[policyID] = await window.ort.InferenceSession.create(
+        loadedModels[policyID] = window.ort.InferenceSession.create(
             policyID, {executionProviders: ["wasm"],}
           );
     }
-    
-    const session = loadedModels[policyID];
-    
+
+    const session = await loadedModels[policyID];
+
     // If the observation is a dictionary, flatten all the values into a single array
-    if (typeof observation === 'object' && !Array.isArray(observation)) {
+    if (typeof observation === 'object' && !Array.isArray(observation) && !ArrayBuffer.isView(observation)) {
         observation = flattenObservation(observation);
     }
 
@@ -72,15 +79,25 @@ async function inferenceONNXPolicy(policyID, observation) {
     // and convert to an ort.Tensor
     const inputTensor = new window.ort.Tensor('float32', observation, [1, observation.length]);
 
+    // RLlib exports name the observation input 'obs' and also take 'seq_lens';
+    // other exports (e.g., CoGrid's JAX training scripts) take a single input
+    // under another name, so fall back to the first non-state input.
+    const obsInputName = session.inputNames.includes('obs')
+        ? 'obs'
+        : session.inputNames.find(name => !name.startsWith('state_in_') && name !== 'seq_lens');
+
     const feeds = {
-        'obs': inputTensor,
-        'seq_lens': new window.ort.Tensor('float32', new Float32Array([1])),
+        [obsInputName]: inputTensor,
     };
+
+    if (session.inputNames.includes('seq_lens')) {
+        feeds['seq_lens'] = new window.ort.Tensor('float32', new Float32Array([1]));
+    }
 
     // Check if the model is recurrent by inspecting input names, we're following
     // the RLlib convention of naming hidden states as 'state_in_0', 'state_in_1', etc.
     const isRecurrent = session.inputNames.some(name => name.startsWith('state_in_'));
-    
+
     if (isRecurrent) {
         // Load hidden states if available, otherwise initialize them
         if (!hiddenStates[policyID]) {
@@ -96,7 +113,7 @@ async function inferenceONNXPolicy(policyID, observation) {
 
                     // Initialize the hidden state tensor with zeros
                     hiddenStates[policyID][name] = new window.ort.Tensor('float32', new Float32Array(expectedShape.reduce((a, b) => a * b)), expectedShape);
-                } 
+                }
                 feeds[name] = hiddenStates[policyID][name];
             }
         });

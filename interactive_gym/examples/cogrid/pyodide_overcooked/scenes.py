@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-import eventlet
 import copy
+
+import eventlet
 
 eventlet.monkey_patch()
 
 
-from interactive_gym.configurations import (
-    configuration_constants,
-)
-from interactive_gym.examples.cogrid import (
-    overcooked_utils,
-)
-from interactive_gym.scenes import gym_scene
-from interactive_gym.scenes import static_scene
-from interactive_gym.scenes import scene
-
+from interactive_gym.configurations import configuration_constants
+from interactive_gym.examples.cogrid import overcooked_utils
+from interactive_gym.scenes import gym_scene, scene, static_scene
 
 # Constants for controls/actions/etc.
 MoveUp = 0
@@ -76,6 +70,43 @@ IBC_POLICY_MAPPING_COORDINATION_RING = {
     0: configuration_constants.PolicyTypes.Human,
     1: "static/assets/overcooked/models/ibc_coordination_ring_00.onnx",
 }
+
+# Trained with cogrid's examples/frame_skip/train_frame_skip_jax.py on CoGrid 0.3.1.
+FRAME_SKIP_POLICY_MAPPING_CRAMPED_ROOM = {
+    0: configuration_constants.PolicyTypes.Human,
+    1: "static/assets/overcooked/models/frame_skip_cramped_room_00.onnx",
+}
+
+# How often (in env steps) the frame-skip policy actually acts: the scene
+# queries it every AI_FRAME_SKIP steps and submits no-ops in between.
+AI_FRAME_SKIP = 5
+# The frame skip the env reports in the policy's observation. It can differ
+# from AI_FRAME_SKIP to tell the policy it acts at a cadence it doesn't. Must be
+# 1, 5, 10, or 15, the values the policy was trained on.
+AI_OBSERVED_FRAME_SKIP = 1
+
+# The frame-skip scenes run CoGrid 0.3.x, the rest run 0.0.9. A Pyodide session
+# can only load one CoGrid version, so don't mix the two in one experiment.
+# gymnasium 1.4 imports multiprocessing.synchronize, which Pyodide doesn't ship.
+COGRID_V03_PACKAGES = ["numpy", "gymnasium==1.3.0", "cogrid==0.3.2"]
+CRAMPED_ROOM_FRAME_SKIP_INIT_FILEPATH = "interactive_gym/examples/cogrid/pyodide_overcooked/env_initialization/cramped_room_frame_skip_environment_initialization.py"
+
+
+def cramped_room_frame_skip_init_code(
+    num_agents: int = 2,
+    ai_observed_frame_skip: int = AI_OBSERVED_FRAME_SKIP,
+    max_steps: int = 1350,
+) -> str:
+    """Return the CoGrid 0.3.x Cramped Room init code with its settings filled in."""
+    with open(CRAMPED_ROOM_FRAME_SKIP_INIT_FILEPATH, encoding="utf-8") as f:
+        code = f.read()
+
+    settings = (
+        f"NUM_AGENTS = {num_agents}\n"
+        f"AI_OBSERVED_FRAME_SKIP = {ai_observed_frame_skip}\n"
+        f"MAX_STEPS = {max_steps}\n"
+    )
+    return settings + code
 
 
 # Map the actions to the arrow keys. The keys are Javascript key press events (all others ignored)
@@ -140,10 +171,10 @@ tutorial_gym_scene = (
         in_game_scene_body="""
         <center>
         <p>
-        Use the arrow keys <img src="static/assets/keys/arrow_keys_2.png" alt="Keyboard arrow keys" height="24" width="20" style="vertical-align:middle;"> 
-        to control your chef <img src="static/assets/overcooked/blue_chef.png" alt="Blue Chef" height="24" width="24" style="vertical-align:middle;"> 
-        and press <img src="static/assets/keys/icons8-w-key-50.png" alt="W key" height="24" width="24" style="vertical-align:middle;"> to pick up and 
-        drop objects. Try to deliver as many dishes as possible by combining onions in the pot, plating the cooked onions, 
+        Use the arrow keys <img src="static/assets/keys/arrow_keys_2.png" alt="Keyboard arrow keys" height="24" width="20" style="vertical-align:middle;">
+        to control your chef <img src="static/assets/overcooked/blue_chef.png" alt="Blue Chef" height="24" width="24" style="vertical-align:middle;">
+        and press <img src="static/assets/keys/icons8-w-key-50.png" alt="W key" height="24" width="24" style="vertical-align:middle;"> to pick up and
+        drop objects. Try to deliver as many dishes as possible by combining onions in the pot, plating the cooked onions,
         and delivering them to the grey delivery zone.
         </p>
         </center>
@@ -194,10 +225,10 @@ cramped_room_sp_0 = (
         in_game_scene_body="""
         <center>
         <p>
-        Use the arrow keys <img src="static/assets/keys/arrow_keys_2.png" alt="Keyboard arrow keys" height="24" width="20" style="vertical-align:middle;"> 
-        to control your chef <img src="static/assets/overcooked/blue_chef.png" alt="Blue Chef" height="24" width="24" style="vertical-align:middle;"> 
-        and press <img src="static/assets/keys/icons8-w-key-50.png" alt="W key" height="24" width="24" style="vertical-align:middle;"> to pick up and 
-        drop objects. Try to deliver as many dishes as possible by combining onions in the pot, plating the cooked onions, 
+        Use the arrow keys <img src="static/assets/keys/arrow_keys_2.png" alt="Keyboard arrow keys" height="24" width="20" style="vertical-align:middle;">
+        to control your chef <img src="static/assets/overcooked/blue_chef.png" alt="Blue Chef" height="24" width="24" style="vertical-align:middle;">
+        and press <img src="static/assets/keys/icons8-w-key-50.png" alt="W key" height="24" width="24" style="vertical-align:middle;"> to pick up and
+        drop objects. Try to deliver as many dishes as possible by combining onions in the pot, plating the cooked onions,
         and delivering them to the grey delivery zone.
         </p>
         </center>
@@ -234,6 +265,42 @@ cramped_room_sp_1 = (
     copy.deepcopy(cramped_room_ibc_0)
     .scene(scene_id="cramped_room_sp_1", experiment_config={})
     .policies(policy_mapping=SP_POLICY_MAPPING_CRAMPED_ROOM)
+)
+
+# CoGrid 0.3.x versions of the tutorial and Cramped Room, the latter with the
+# frame-skip policy. CoGrid 0.3's Cramped Room is 5 x 4 tiles (0.0.9's was 7 x 6).
+frame_skip_tutorial_gym_scene = (
+    copy.deepcopy(tutorial_gym_scene)
+    .scene(scene_id="overcooked_frame_skip_tutorial", experiment_config={})
+    .rendering(
+        game_width=overcooked_utils.TILE_SIZE * 5,
+        game_height=overcooked_utils.TILE_SIZE * 4,
+    )
+    .pyodide(
+        environment_initialization_code=cramped_room_frame_skip_init_code(
+            num_agents=1, max_steps=1000
+        ),
+        packages_to_install=COGRID_V03_PACKAGES,
+    )
+)
+
+cramped_room_frame_skip = (
+    copy.deepcopy(cramped_room_sp_0)
+    .scene(scene_id="cramped_room_frame_skip", experiment_config={})
+    .policies(
+        policy_mapping=FRAME_SKIP_POLICY_MAPPING_CRAMPED_ROOM,
+        frame_skip=AI_FRAME_SKIP,
+    )
+    .rendering(
+        game_width=overcooked_utils.TILE_SIZE * 5,
+        game_height=overcooked_utils.TILE_SIZE * 4,
+    )
+    .pyodide(
+        environment_initialization_code=cramped_room_frame_skip_init_code(
+            ai_observed_frame_skip=AI_OBSERVED_FRAME_SKIP, max_steps=1350
+        ),
+        packages_to_install=COGRID_V03_PACKAGES,
+    )
 )
 
 cramped_room_options_scene_0 = (
