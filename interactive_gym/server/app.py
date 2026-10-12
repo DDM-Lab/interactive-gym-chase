@@ -105,7 +105,7 @@ redis_host = "127.0.0.1"
 try:
     redis.Redis(redis_host, socket_connect_timeout=1).ping()
     message_queue = f"redis://{redis_host}:6379/0"
-except redis.exceptions.ConnectionError:
+except (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError):
     print("Redis is not available for message queue. Proceeding without it...")
     message_queue = None
 

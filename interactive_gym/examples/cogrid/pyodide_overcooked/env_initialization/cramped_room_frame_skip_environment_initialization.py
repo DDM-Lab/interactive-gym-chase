@@ -21,8 +21,6 @@ inference runs asynchronously in the browser, so the AI's action can land a step
 after the one it was requested on, and env-side masking would discard it.
 """
 
-from __future__ import annotations
-
 import copy
 import dataclasses
 import typing
