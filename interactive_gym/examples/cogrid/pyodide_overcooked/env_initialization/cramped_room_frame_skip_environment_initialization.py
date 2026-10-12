@@ -449,11 +449,63 @@ class InteractiveGymRenderMixin:
         return obs, self._add_position_infos(infos)
 
     def step(self, actions):
+        # The archived human-AI experiment logged unweighted reward components
+        # from the pre-step grid, while only delivery contributed to the score.
+        # Calculate before stepping: CoGrid 0.3 rebuilds these grid objects.
+        component_infos = self._get_component_infos(actions)
         obs, rewards, terminateds, truncateds, infos = super().step(actions)
         self._sync_objects_from_state()
         terminateds["__all__"] = all(terminateds.values())
         truncateds["__all__"] = all(truncateds.values())
+        for agent_id, components in component_infos.items():
+            infos[agent_id].update(components)
         return obs, rewards, terminateds, truncateds, self._add_position_infos(infos)
+
+    def _get_component_infos(self, actions):
+        """Preserve the archive's four component names and unit coefficients.
+
+        These use the archived reward predicates (interaction, held item, and
+        facing cell), rather than adding shaping rewards to the environment.
+        Reset infos intentionally have no components, matching the old logger.
+        """
+        infos = {
+            agent_id: {
+                "delivery_reward": 0.0,
+                "delivery_act_reward": 0.0,
+                "onion_in_pot_reward": 0.0,
+                "soup_in_dish_reward": 0.0,
+            }
+            for agent_id in self._agent_id_order
+        }
+        for agent_id, action in self._action_idx_to_str(actions).items():
+            if action != grid_actions.Actions.PickupDrop:
+                continue
+            agent = self.grid.grid_agents[agent_id]
+            if not agent.inventory:
+                continue
+            held = agent.inventory[0]
+            facing = self.grid.get(*agent.front_pos)
+            if isinstance(facing, overcooked_grid_objects.DeliveryZone):
+                if isinstance(held, overcooked_grid_objects.OnionSoup):
+                    infos[agent_id]["delivery_act_reward"] = 1.0
+            elif isinstance(facing, overcooked_grid_objects.Pot):
+                if isinstance(held, overcooked_grid_objects.Onion):
+                    if len(facing.objects_in_pot) < facing.capacity:
+                        infos[agent_id]["onion_in_pot_reward"] = 1.0
+                elif isinstance(held, overcooked_grid_objects.Plate):
+                    # In 0.3 an empty pot may have timer 0; it is not ready soup.
+                    if (
+                        len(facing.objects_in_pot) == facing.capacity
+                        and facing.cooking_timer == 0
+                    ):
+                        infos[agent_id]["soup_in_dish_reward"] = 1.0
+
+        common_delivery = sum(
+            components["delivery_act_reward"] for components in infos.values()
+        )
+        for components in infos.values():
+            components["delivery_reward"] = common_delivery
+        return infos
 
     def _add_position_infos(self, infos):
         """Add the agent positions and directions to the infos dictionary."""
