@@ -96,35 +96,42 @@ def create_cramped_room_scenes_with_frame_skip(frame_skip_value: int):
     return scene.SceneWrapper(scenes=[tutorial, *episodes])
 
 
-speed_data_path = (
-    Path(__file__).resolve().parents[2] / "scenes" / "subject_mean_speeds.json"
-)
-with speed_data_path.open(encoding="utf-8") as speed_data_file:
-    subject_mean_speeds = json.load(speed_data_file)
-
-# Each JSON entry gets one slot, so repeated frame skips retain their frequency.
-frame_skip_values = [math.ceil(speeds[1]) for speeds in subject_mean_speeds.values()]
-frameskip_scene_wrappers = {
-    frame_skip: create_cramped_room_scenes_with_frame_skip(frame_skip)
-    for frame_skip in sorted(set(frame_skip_values))
-}
-
 end_scene = copy.deepcopy(oc_scenes.end_scene)
 end_scene.completion_code = "C1OUIO1A"
 
-stager = stager.Stager(
-    scenes=[
-        oc_scenes.start_scene,
-        scene.RandomizeOrder(
-            scenes=[
-                frameskip_scene_wrappers[frame_skip] for frame_skip in frame_skip_values
-            ],
-            keep_n=1,
-        ),
-        end_survey_scene,
-        end_scene,
-    ]
-)
+
+def create_experiment_stager(use_human_dist: bool = False):
+    """Assign actual AI frame skip; observed frame skip remains 1."""
+    frame_skip_values = [5]
+    if use_human_dist:
+        speed_data_path = (
+            Path(__file__).resolve().parents[2] / "scenes" / "subject_mean_speeds.json"
+        )
+        with speed_data_path.open(encoding="utf-8") as speed_data_file:
+            subject_mean_speeds = json.load(speed_data_file)
+        # Each JSON entry gets one slot, preserving repeated frame-skip frequency.
+        frame_skip_values = [
+            math.ceil(speeds[1]) for speeds in subject_mean_speeds.values()
+        ]
+
+    frameskip_scene_wrappers = {
+        frame_skip: create_cramped_room_scenes_with_frame_skip(frame_skip)
+        for frame_skip in sorted(set(frame_skip_values))
+    }
+    return stager.Stager(
+        scenes=[
+            oc_scenes.start_scene,
+            scene.RandomizeOrder(
+                scenes=[
+                    frameskip_scene_wrappers[frame_skip]
+                    for frame_skip in frame_skip_values
+                ],
+                keep_n=1,
+            ),
+            end_survey_scene,
+            end_scene,
+        ]
+    )
 
 
 if __name__ == "__main__":
@@ -134,6 +141,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--data-dir", default="data", help="Directory for participant data"
+    )
+    parser.add_argument(
+        "--use-human-dist",
+        action="store_true",
+        help="Sample actual AI frame skip from the human speed distribution instead of using 5",
     )
     parser.add_argument(
         "--debug", type=bool, default=False, help="Enable debug mode to print episode information"
@@ -147,7 +159,7 @@ if __name__ == "__main__":
     experiment_config = (
         experiment_config.ExperimentConfig()
         .experiment(
-            stager=stager,
+            stager=create_experiment_stager(use_human_dist=args.use_human_dist),
             experiment_id="overcooked_test",
             data_dir=args.data_dir,
             scene_data_directories={
