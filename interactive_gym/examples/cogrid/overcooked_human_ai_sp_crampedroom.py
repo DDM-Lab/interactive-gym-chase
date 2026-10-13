@@ -109,6 +109,9 @@ frameskip_scene_wrappers = {
     for frame_skip in sorted(set(frame_skip_values))
 }
 
+end_scene = copy.deepcopy(oc_scenes.end_scene)
+end_scene.completion_code = "C1OUIO1A"
+
 stager = stager.Stager(
     scenes=[
         oc_scenes.start_scene,
@@ -119,7 +122,7 @@ stager = stager.Stager(
             keep_n=1,
         ),
         end_survey_scene,
-        oc_scenes.end_scene,
+        end_scene,
     ]
 )
 

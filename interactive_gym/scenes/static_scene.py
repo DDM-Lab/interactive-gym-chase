@@ -132,15 +132,15 @@ class EndScene(StaticScene):
 
 
 class CompletionCodeScene(EndScene):
-    """A special EndScene that generates and displays a unique completion code.
+    """An EndScene that displays a configured or randomly generated completion code.
 
     This scene is typically used at the end of an experiment to provide participants
     with a unique code that they can use to verify their participation or claim compensation.
     """
 
-    def __init__(self):
+    def __init__(self, completion_code: str | None = None):
         super().__init__()
-        self.completion_code = None
+        self.completion_code = completion_code
         self.should_export_metadata = True
 
     def build(self):
@@ -149,10 +149,10 @@ class CompletionCodeScene(EndScene):
         )
         return super().build()
 
-    def _create_html_completion_code(self) -> str:
+    def _create_html_completion_code(self) -> tuple[str, str]:
         """Create HTML content for displaying a completion code.
 
-        This method generates a unique completion code using UUIDs and formats it as HTML.
+        This method uses the configured code or generates a UUID and formats it as HTML.
         It also includes instructions for participants to copy and submit the code.
 
         :return: A tuple containing the HTML content and the completion code
@@ -160,7 +160,7 @@ class CompletionCodeScene(EndScene):
         """
         import uuid
 
-        completion_code = str(uuid.uuid4())
+        completion_code = self.completion_code if self.completion_code is not None else str(uuid.uuid4())
         html = f"""
         <p>Your completion code is:</p>
         <h2 style="font-family: monospace; background-color: #f0f0f0; padding: 10px; border-radius: 5px;">{completion_code}</h2>
