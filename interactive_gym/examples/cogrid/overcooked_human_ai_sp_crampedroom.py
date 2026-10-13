@@ -68,7 +68,7 @@ def create_cramped_room_episode(episode_num: int) -> scene.Scene:
         in_game_scene_body="""
         <center>
         <p>
-        Use the arrow keys <img src="static/assets/keys/arrow_keys_2.png" alt="Keyboard arrow keys" height="24" width="20" style="vertical-align:middle;"> 
+        aaaUse the arrow keys <img src="static/assets/keys/arrow_keys_2.png" alt="Keyboard arrow keys" height="24" width="20" style="vertical-align:middle;"> 
         to control your chef <img src="static/assets/overcooked/blue_chef.png" alt="Blue Chef" height="24" width="24" style="vertical-align:middle;"> 
         and press <img src="static/assets/keys/icons8-w-key-50.png" alt="W key" height="24" width="24" style="vertical-align:middle;"> to pick up and 
         drop objects. Try to deliver as many dishes as possible by combining onions in the pot, plating the cooked onions, 
