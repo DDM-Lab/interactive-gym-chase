@@ -23,7 +23,32 @@ after the one it was requested on, and env-side masking would discard it.
 
 import copy
 import dataclasses
+import sys
 import typing
+
+# Gymnasium imports its multiprocessing-based vector environment even when
+# CoGrid only uses ordinary spaces. Pyodide has no _multiprocessing extension;
+# provide the import-time symbols while keeping process creation unavailable.
+if sys.platform == "emscripten":
+    import types
+
+    try:
+        import _multiprocessing
+    except ModuleNotFoundError:
+        _multiprocessing = types.ModuleType("_multiprocessing")
+
+        class _UnavailableSemLock:
+            SEM_VALUE_MAX = 2**31 - 1
+
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("multiprocessing is unavailable in Pyodide")
+
+        def _unavailable_sem_unlink(name):
+            raise RuntimeError("multiprocessing is unavailable in Pyodide")
+
+        _multiprocessing.SemLock = _UnavailableSemLock
+        _multiprocessing.sem_unlink = _unavailable_sem_unlink
+        sys.modules["_multiprocessing"] = _multiprocessing
 
 import numpy as np
 from cogrid import backend
