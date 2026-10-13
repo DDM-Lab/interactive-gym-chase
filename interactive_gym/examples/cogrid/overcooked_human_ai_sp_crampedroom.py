@@ -8,6 +8,9 @@ eventlet.monkey_patch()
 
 import argparse
 import copy
+import json
+import math
+from pathlib import Path
 
 from interactive_gym.server import app
 from interactive_gym.scenes import scene
@@ -44,8 +47,10 @@ def create_cramped_room_episode(episode_num: int) -> scene.Scene:
     """Create a cramped room scene with the given episode number."""
     base_scene = (
         copy.deepcopy(oc_scenes.cramped_room_frame_skip)
-        # Each round exports to data/{scene_id}/{subject_id}.csv.
-        .scene(scene_id=f"cramped_room_frame_skip_round_{episode_num + 1:02d}")
+        .scene(
+            scene_id=f"cramped_room_frame_skip_round_{episode_num + 1:02d}",
+            should_export_metadata=True,
+        )
         .gameplay(num_episodes=1)
     )
     
@@ -80,31 +85,39 @@ def create_cramped_room_episode(episode_num: int) -> scene.Scene:
     return scene_obj
 
 def create_cramped_room_scenes_with_frame_skip(frame_skip_value: int):
-    """
-    Create a complete set of cramped room scenes (20 episodes) with the specified frame skip value.
-    Returns a SceneWrapper containing all episodes for that frame skip.
-    """
-    # Create all 20 episodes
-    episodes = [create_cramped_room_episode(episode_num) for episode_num in range(20)]
-    
-    # Update frame_skip for each episode's policies
-    for episode_scene in episodes:
-        # The scene object has a policies method that we need to override the frame_skip
-        episode_scene.policies(frame_skip=frame_skip_value)
-    
-    # Create a SceneWrapper with a descriptive scene_id
-    return scene.SceneWrapper(
-        scenes=episodes
-    )
+    """Create the tutorial and 20 episodes with one frame skip value."""
+    tutorial = copy.deepcopy(oc_scenes.frame_skip_tutorial_gym_scene)
+    tutorial.policies(frame_skip=frame_skip_value)
 
-# Create scene wrapper with fixed frame skip value of 5
-cramped_room_scenes = create_cramped_room_scenes_with_frame_skip(5)
+    episodes = [create_cramped_room_episode(episode_num) for episode_num in range(20)]
+    for episode_scene in episodes:
+        episode_scene.policies(frame_skip=frame_skip_value)
+
+    return scene.SceneWrapper(scenes=[tutorial, *episodes])
+
+
+speed_data_path = (
+    Path(__file__).resolve().parents[2] / "scenes" / "subject_mean_speeds.json"
+)
+with speed_data_path.open(encoding="utf-8") as speed_data_file:
+    subject_mean_speeds = json.load(speed_data_file)
+
+# Each JSON entry gets one slot, so repeated frame skips retain their frequency.
+frame_skip_values = [math.ceil(speeds[1]) for speeds in subject_mean_speeds.values()]
+frameskip_scene_wrappers = {
+    frame_skip: create_cramped_room_scenes_with_frame_skip(frame_skip)
+    for frame_skip in sorted(set(frame_skip_values))
+}
 
 stager = stager.Stager(
     scenes=[
         oc_scenes.start_scene,
-        oc_scenes.frame_skip_tutorial_gym_scene,
-        cramped_room_scenes,
+        scene.RandomizeOrder(
+            scenes=[
+                frameskip_scene_wrappers[frame_skip] for frame_skip in frame_skip_values
+            ],
+            keep_n=1,
+        ),
         end_survey_scene,
         oc_scenes.end_scene,
     ]
@@ -117,6 +130,9 @@ if __name__ == "__main__":
         "--port", type=int, default=5703, help="Port number to listen on"
     )
     parser.add_argument(
+        "--data-dir", default="data", help="Directory for participant data"
+    )
+    parser.add_argument(
         "--debug", type=bool, default=False, help="Enable debug mode to print episode information"
     )
     args = parser.parse_args()
@@ -127,7 +143,21 @@ if __name__ == "__main__":
 
     experiment_config = (
         experiment_config.ExperimentConfig()
-        .experiment(stager=stager, experiment_id="overcooked_test")
+        .experiment(
+            stager=stager,
+            experiment_id="overcooked_test",
+            data_dir=args.data_dir,
+            scene_data_directories={
+                "overcooked_frame_skip_tutorial": "overcooked_tutorial",
+                **{
+                    f"cramped_room_frame_skip_round_{episode_num + 1:02d}": str(
+                        Path("cramped_room_frame_skip")
+                        / f"cramped_room_frame_skip_round_{episode_num + 1:02d}"
+                    )
+                    for episode_num in range(20)
+                },
+            },
+        )
         .hosting(port=args.port, host="0.0.0.0")
     )
 

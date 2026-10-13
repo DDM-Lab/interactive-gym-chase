@@ -1,9 +1,9 @@
 from __future__ import annotations
-import os
 import copy
 import json
 import random
 from datetime import datetime
+from pathlib import Path
 from interactive_gym.scenes.utils import NotProvided
 
 import flask_socketio
@@ -108,10 +108,11 @@ class Scene:
             **metadata,
         }
 
-    def export_metadata(self, subject_id: str):
+    def export_metadata(self, subject_id: str, data_dir: str | Path = "data"):
         """Save the metadata for the current scene."""
-        os.makedirs(f"data/{self.scene_id}", exist_ok=True)
-        with open(f"data/{self.scene_id}/{subject_id}_metadata.json", "w") as f:
+        scene_dir = Path(data_dir) / self.scene_id
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        with (scene_dir / f"{subject_id}_metadata.json").open("w") as f:
             json.dump(self.scene_metadata, f)
 
 

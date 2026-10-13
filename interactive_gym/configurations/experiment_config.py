@@ -12,6 +12,8 @@ class ExperimentConfig:
         # Experiment
         self.experiment_id: str = None
         self.stager: Stager = None
+        self.data_dir: str = "data"
+        self.scene_data_directories: dict[str, str] = {}
 
         # Hosting
         self.host = None
@@ -20,13 +22,23 @@ class ExperimentConfig:
         self.min_ping_measurements = 5
 
     def experiment(
-        self, experiment_id: str = NotProvided, stager: Stager = NotProvided
+        self,
+        experiment_id: str = NotProvided,
+        stager: Stager = NotProvided,
+        data_dir: str = NotProvided,
+        scene_data_directories: dict[str, str] = NotProvided,
     ) -> ExperimentConfig:
         if experiment_id is not NotProvided:
             self.experiment_id = experiment_id
 
         if stager is not NotProvided:
             self.stager = stager
+
+        if data_dir is not NotProvided:
+            self.data_dir = data_dir
+
+        if scene_data_directories is not NotProvided:
+            self.scene_data_directories = dict(scene_data_directories)
 
         return self
 

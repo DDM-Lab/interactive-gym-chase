@@ -6,6 +6,7 @@ import os
 import secrets
 import threading
 import uuid
+from pathlib import Path
 import msgpack
 import pandas as pd
 import os
@@ -51,6 +52,15 @@ def setup_logger(name, log_file, level=logging.INFO):
 logger = setup_logger(__name__, "./iglog.log", level=logging.DEBUG)
 
 CONFIG = remote_config.RemoteConfig()
+
+
+def scene_data_directory(scene_id: str) -> Path:
+    """Return the output directory for one scene."""
+    data_dir = Path(getattr(CONFIG, "data_dir", "data"))
+    relative_dir = getattr(CONFIG, "scene_data_directories", {}).get(
+        scene_id, scene_id
+    )
+    return data_dir / relative_dir
 
 
 # Generic stager is the "base" Stager that we'll build for each
@@ -163,7 +173,10 @@ def register_subject(data):
     participant_stager = STAGERS[subject_id]
     participant_stager.start(socketio, room=sid)
 
-    participant_stager.current_scene.export_metadata(subject_id)
+    participant_stager.current_scene.export_metadata(
+        subject_id,
+        data_dir=scene_data_directory(participant_stager.current_scene.scene_id).parent,
+    )
 
 
 # @socketio.on("connect")
@@ -214,7 +227,9 @@ def advance_scene(data):
         GAME_MANAGERS[current_scene.scene_id] = game_manager
 
     if current_scene.should_export_metadata:
-        current_scene.export_metadata(subject_id)
+        current_scene.export_metadata(
+            subject_id, data_dir=scene_data_directory(current_scene.scene_id).parent
+        )
 
 
 @socketio.on("join_game")
@@ -457,19 +472,17 @@ def on_exit():
 def data_emission(data):
     """Save the static scene data to a csv file."""
     subject_id = get_subject_id_from_session_id(flask.request.sid)
-    # Save to a csv in data/{scene_id}/{subject_id}.csv
-    # Save the static scene data to a csv file.
     scene_id = data.get("scene_id")
     if not scene_id:
         logger.error("Scene ID is required to save data.")
         return
 
-    # Create a directory for the CSV files if it doesn't exist
-    os.makedirs(f"data/{scene_id}/", exist_ok=True)
+    scene_dir = scene_data_directory(scene_id)
+    scene_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate a unique filename
-    filename = f"data/{scene_id}/{subject_id}.csv"
-    globals_filename = f"data/{scene_id}/{subject_id}_globals.json"
+    filename = scene_dir / f"{subject_id}.csv"
+    globals_filename = scene_dir / f"{subject_id}_globals.json"
 
     # Save as CSV
     logger.info(f"Saving {filename}")
@@ -515,12 +528,12 @@ def receive_remote_game_data(data):
     # Convert to DataFrame
     df = pd.DataFrame(padded_data)
 
-    # Create a directory for the CSV files if it doesn't exist
-    os.makedirs(f"data/{data['scene_id']}/", exist_ok=True)
+    scene_dir = scene_data_directory(data["scene_id"])
+    scene_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate a unique filename
-    filename = f"data/{data['scene_id']}/{subject_id}.csv"
-    globals_filename = f"data/{data['scene_id']}/{subject_id}_globals.json"
+    filename = scene_dir / f"{subject_id}.csv"
+    globals_filename = scene_dir / f"{subject_id}_globals.json"
 
     # Save as CSV
     logger.info(f"Saving {filename}")
