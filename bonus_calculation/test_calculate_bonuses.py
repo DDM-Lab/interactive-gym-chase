@@ -75,7 +75,8 @@ class PaymentTests(unittest.TestCase):
         (end / "human_metadata.json").write_text("{}")
         result = self.payments()["human"]
         self.assertTrue(result["completion_metadata_present"])
-        self.assertEqual(result["missing_rounds"], "20")
+        self.assertEqual(result["rounds_recorded"], 19)
+        self.assertEqual(result["completion_status"], "incomplete")
         self.assertEqual(result["total_delivery_reward"], "190")
         for key in ("base_payment", "bonus", "total_payment"):
             self.assertEqual(result[key], "0.00")
@@ -86,8 +87,7 @@ class PaymentTests(unittest.TestCase):
         result = self.payments()["human"]
         self.assertEqual(result["rounds_recorded"], 20)
         self.assertEqual(result["rounds_completed"], 19)
-        self.assertEqual(result["missing_rounds"], "")
-        self.assertEqual(result["incomplete_rounds"], "20")
+        self.assertIn("round 20:", result["recording_issues"])
         self.assertEqual(result["total_payment"], "0.00")
 
     def test_duplicate_gap_and_missing_terminal_do_not_count_as_full(self):

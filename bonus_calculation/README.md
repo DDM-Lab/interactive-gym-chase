@@ -65,13 +65,32 @@ columns or malformed reward/timestep values stop the script before replacing the
 output, rather than producing a payment from unreadable data.
 
 The report includes participants discovered in start, tutorial, survey, and
-completion files, even if they recorded no main rounds. It contains:
+completion files, even if they recorded no main rounds. Its columns are:
 
-- `subject_id`, `completion_status`, `rounds_recorded`, `rounds_completed`;
-- `missing_rounds`, `incomplete_rounds` (semicolon-separated round numbers);
-- `completion_metadata_present`, `recording_issues`;
-- `total_delivery_reward` (including recorded rewards for incomplete sessions);
-- `base_payment`, `bonus`, `total_payment` (USD, two decimal places).
+```text
+subject_id,completion_status,rounds_recorded,rounds_completed,completion_metadata_present,total_delivery_reward,base_payment,bonus,total_payment,session_start_datetime,session_completion_datetime,completion_time,recording_issues
+```
+
+`total_delivery_reward` includes recorded rewards for incomplete sessions.
+Payment amounts are USD with two decimal places. `completion_time` is total
+elapsed time between the recorded start and completion timestamps, in
+`HH:MM:SS` format (including tutorials, breaks, and survey time). It is blank if
+either timestamp is missing. A completion timestamp earlier than the start
+stops the script with an error. Durations longer than a day retain total hours.
+
+`session_start_datetime` comes from the `timestamp` in
+`overcooked_start_scene/<subject_id>_metadata.json` (normally
+`YYYY-MM-DD HH:MM:SS`). Both timestamp columns display 12-hour time with AM/PM
+(for example, `2026-10-13 08:34:38 PM`). Sorting uses the original timestamps
+before display formatting. The report preserves the server's recorded local time; the
+metadata does not include a timezone. If the start metadata or its timestamp is
+missing, the field is blank and payment eligibility is unaffected.
+
+Rows are ordered by `session_completion_datetime`, newest completion first.
+This timestamp comes from `end_completion_code_scene/<subject_id>_metadata.json`.
+Completed sessions without this timestamp follow dated completions. Incomplete
+sessions follow all completed sessions, ordered by newest start time. Completion
+metadata remains optional for payment eligibility.
 
 ## Verification
 

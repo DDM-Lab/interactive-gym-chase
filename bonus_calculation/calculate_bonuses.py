@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -17,8 +19,9 @@ REWARD_COLUMN = "infos.0.delivery_reward"
 ROUND_PATTERN = re.compile(r"cramped_room_frame_skip_round_(\d{2})")
 FIELDNAMES = [
     "subject_id", "completion_status", "rounds_recorded", "rounds_completed",
-    "missing_rounds", "incomplete_rounds", "completion_metadata_present",
+    "completion_metadata_present",
     "total_delivery_reward", "base_payment", "bonus", "total_payment",
+    "session_start_datetime", "session_completion_datetime", "completion_time",
     "recording_issues",
 ]
 
@@ -98,6 +101,23 @@ def collect_subjects(data_dir: Path) -> set[str]:
     return subjects
 
 
+def read_scene_timestamp(data_dir: Path, subject_id: str, scene_id: str) -> str:
+    """Preserve a scene's recorded server-local date and time."""
+    path = data_dir / scene_id / f"{subject_id}_metadata.json"
+    if not path.is_file():
+        return ""
+    with path.open(encoding="utf-8-sig") as source:
+        metadata = json.load(source)
+    if not isinstance(metadata, dict):
+        raise ValueError(f"{path}: scene metadata must be a JSON object")
+    timestamp = metadata.get("timestamp")
+    if timestamp is None:
+        return ""
+    if not isinstance(timestamp, str):
+        raise ValueError(f"{path}: scene timestamp must be a string")
+    return timestamp
+
+
 def calculate_payments(
     data_dir: Path, steps_per_round: int = STEPS_PER_ROUND,
 ) -> list[dict]:
@@ -137,11 +157,15 @@ def calculate_payments(
         bonus = total_reward * BONUS_PER_DELIVERY if is_complete else Decimal("0")
         payments.append({
             "subject_id": subject_id,
+            "session_start_datetime": read_scene_timestamp(
+                data_dir, subject_id, "overcooked_start_scene",
+            ),
+            "session_completion_datetime": read_scene_timestamp(
+                data_dir, subject_id, "end_completion_code_scene",
+            ),
             "completion_status": "completed" if is_complete else "incomplete",
             "rounds_recorded": len(rounds),
             "rounds_completed": len(completed),
-            "missing_rounds": ";".join(map(str, sorted(expected - rounds.keys()))),
-            "incomplete_rounds": ";".join(map(str, sorted(rounds.keys() - completed))),
             "completion_metadata_present": (
                 data_dir / "end_completion_code_scene" / f"{subject_id}_metadata.json"
             ).is_file(),
@@ -154,6 +178,34 @@ def calculate_payments(
                 for number, result in sorted(rounds.items()) if result.issue
             ),
         })
+    # Recorded timestamps use YYYY-MM-DD HH:MM:SS, so string sorting is chronological.
+    # Completed sessions without completion metadata follow dated completions;
+    # incomplete sessions follow all completions, newest start first.
+    payments.sort(key=lambda row: (
+        row["completion_status"] == "completed",
+        row["session_completion_datetime"] if row["completion_status"] == "completed" else "",
+        row["session_start_datetime"],
+    ), reverse=True)
+    # Format after sorting so AM/PM strings do not affect chronological order.
+    for row in payments:
+        timestamps = {
+            column: datetime.strptime(row[column], "%Y-%m-%d %H:%M:%S")
+            if row[column] else None
+            for column in ("session_start_datetime", "session_completion_datetime")
+        }
+        start = timestamps["session_start_datetime"]
+        end = timestamps["session_completion_datetime"]
+        row["completion_time"] = ""
+        if start is not None and end is not None:
+            seconds = int((end - start).total_seconds())
+            if seconds < 0:
+                raise ValueError(f"{row['subject_id']}: completion timestamp precedes session start")
+            hours, remainder = divmod(seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            row["completion_time"] = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        for column, timestamp in timestamps.items():
+            if timestamp is not None:
+                row[column] = timestamp.strftime("%Y-%m-%d %I:%M:%S %p")
     return payments
 
 
