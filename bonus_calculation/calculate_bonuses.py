@@ -199,10 +199,14 @@ def calculate_payments(
         if start is not None and end is not None:
             seconds = int((end - start).total_seconds())
             if seconds < 0:
-                raise ValueError(f"{row['subject_id']}: completion timestamp precedes session start")
-            hours, remainder = divmod(seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-            row["completion_time"] = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                issue = "completion timestamp precedes session start; completion_time unavailable"
+                row["recording_issues"] = " | ".join(
+                    part for part in (row["recording_issues"], issue) if part
+                )
+            else:
+                hours, remainder = divmod(seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                row["completion_time"] = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
         for column, timestamp in timestamps.items():
             if timestamp is not None:
                 row[column] = timestamp.strftime("%Y-%m-%d %I:%M:%S %p")

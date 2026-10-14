@@ -75,8 +75,14 @@ subject_id,completion_status,rounds_recorded,rounds_completed,completion_metadat
 Payment amounts are USD with two decimal places. `completion_time` is total
 elapsed time between the recorded start and completion timestamps, in
 `HH:MM:SS` format (including tutorials, breaks, and survey time). It is blank if
-either timestamp is missing. A completion timestamp earlier than the start
-stops the script with an error. Durations longer than a day retain total hours.
+either timestamp is missing. If completion precedes the recorded start, the
+duration is left blank and the discrepancy is flagged in `recording_issues`.
+This does not stop the report or change payment eligibility: payments depend on
+the round recordings. Durations longer than a day retain total hours.
+
+A participant revisiting their URL can overwrite their start-scene metadata
+under the same subject ID after completing the experiment. The script preserves
+these recorded timestamps rather than inventing an earlier session start.
 
 `session_start_datetime` comes from the `timestamp` in
 `overcooked_start_scene/<subject_id>_metadata.json` (normally

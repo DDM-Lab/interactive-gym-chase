@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -118,6 +119,46 @@ class PaymentTests(unittest.TestCase):
                 self.write_round("human", 1, reward)
                 with self.assertRaises(ValueError):
                     self.payments()
+
+    def test_reversed_session_times_are_flagged_without_blocking_payments(self):
+        self.complete_subject("restarted")
+        self.complete_subject("normal")
+        for subject, start, end in (
+            ("restarted", "2026-10-14 17:54:41", "2026-10-14 17:51:42"),
+            ("normal", "2026-10-14 23:50:00", "2026-10-15 00:10:30"),
+        ):
+            for scene_id, timestamp in (
+                ("overcooked_start_scene", start), ("end_completion_code_scene", end),
+            ):
+                folder = self.data / scene_id
+                folder.mkdir(exist_ok=True)
+                (folder / f"{subject}_metadata.json").write_text(
+                    json.dumps({"timestamp": timestamp}),
+                )
+        results = self.payments()
+        restarted = results["restarted"]
+        self.assertEqual(restarted["completion_status"], "completed")
+        self.assertEqual(restarted["total_payment"], "4.40")
+        self.assertEqual(restarted["session_start_datetime"], "2026-10-14 05:54:41 PM")
+        self.assertEqual(restarted["session_completion_datetime"], "2026-10-14 05:51:42 PM")
+        self.assertEqual(restarted["completion_time"], "")
+        self.assertIn("completion timestamp precedes session start", restarted["recording_issues"])
+        self.assertEqual(results["normal"]["completion_time"], "00:20:30")
+        self.assertEqual(results["normal"]["total_payment"], "4.40")
+
+    def test_reversed_session_times_preserve_existing_recording_issues(self):
+        self.write_round("human", 1, partial=True)
+        for scene_id, timestamp in (
+            ("overcooked_start_scene", "2026-10-14 17:54:41"),
+            ("end_completion_code_scene", "2026-10-14 17:51:42"),
+        ):
+            folder = self.data / scene_id
+            folder.mkdir()
+            (folder / "human_metadata.json").write_text(json.dumps({"timestamp": timestamp}))
+        result = self.payments()["human"]
+        self.assertIn("round 1:", result["recording_issues"])
+        self.assertIn("completion timestamp precedes session start", result["recording_issues"])
+        self.assertEqual(result["total_payment"], "0.00")
 
     def test_missing_reward_column_fails(self):
         path = self.write_round("human", 1)
