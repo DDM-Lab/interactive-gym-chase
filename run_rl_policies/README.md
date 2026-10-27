@@ -42,6 +42,10 @@ G:\.shortcut-targets-by-id\1zFPkx_p8sPRshZUcZ95mHkYUPR3dh1-i\2025GraceRoessling\
 
 Override it with `--output-dir` to save elsewhere. Direct Python use of
 `ExperimentConfig` still defaults to `<repository>/data/ai_only`.
+On Windows, output I/O automatically uses extended-length paths so the long
+Google Drive shortcut path works with run subfolders and participant filenames.
+The terminal displays the ordinary path; Python's returned run path may start
+with `\\?\` (or `\\?\UNC\` for a network share).
 There is no Flask server, browser, human player, or real-time pacing.
 
 To run participants concurrently, add `--workers`:

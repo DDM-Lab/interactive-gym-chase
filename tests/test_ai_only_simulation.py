@@ -4,8 +4,10 @@ import csv
 from dataclasses import replace
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
+import shutil
 import unittest
 from unittest.mock import patch
 
@@ -159,6 +161,31 @@ class AIOnlyTests(unittest.TestCase):
             ))
             metadata = json.loads((run / "metadata.json").read_text(encoding="utf-8"))
             self.assertEqual(metadata["execution"], {"mode": "sequential", "effective_workers": 1})
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length paths")
+    def test_long_output_paths_work_in_spawned_workers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / ("a" * 80) / ("b" * 80) / ("c" * 80)
+            try:
+                run = run_experiment(ExperimentConfig(
+                    participants=2, episodes=1, max_steps=5, workers=2, output_dir=output,
+                ))
+                self.assertTrue(str(run).startswith("\\\\?\\"))
+                self.assertGreater(len(str(run)), 260)
+                metadata = json.loads((run / "metadata.json").read_text(encoding="utf-8"))
+                self.assertEqual(metadata["status"], "complete")
+                self.assertEqual(metadata["completed_episodes"], 2)
+                for aid in (0, 1):
+                    path = next(run.glob(f"cramped_room_{aid}_*game_data.csv"))
+                    with path.open(newline="", encoding="utf-8") as file:
+                        self.assertEqual(len(list(csv.DictReader(file))), 5)
+            finally:
+                # Keep cleanup inside the generated temp directory and retain
+                # the extended prefix while deleting its long descendants.
+                target = experiment._output_path(Path(tmp) / ("a" * 80))
+                self.assertEqual(target.parent, experiment._output_path(tmp))
+                if target.exists():
+                    shutil.rmtree(target)
 
     def test_worker_error_marks_run_failed_and_preserves_existing_file(self):
         run_parallel = experiment._run_parallel

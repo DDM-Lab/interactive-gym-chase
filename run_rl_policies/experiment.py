@@ -9,6 +9,7 @@ from importlib.metadata import distributions
 import json
 import multiprocessing
 from multiprocessing.util import Finalize
+import os
 from pathlib import Path
 import platform
 from queue import Empty
@@ -63,6 +64,16 @@ def _git(*args):
 
 def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _output_path(path):
+    """Use Windows extended-length paths for all output I/O, including workers."""
+    absolute = str(Path(path).resolve())
+    if os.name != "nt" or absolute.startswith("\\\\?\\"):
+        return Path(absolute)
+    if absolute.startswith("\\\\"):
+        return Path("\\\\?\\UNC\\" + absolute[2:])
+    return Path("\\\\?\\" + absolute)
 
 
 def _run_participant(config, participant, run_dir, env, policy, report, stop=None):
@@ -163,7 +174,8 @@ def run_experiment(config: ExperimentConfig) -> Path:
                 raise ValueError("Policy action count does not match the environment action set")
 
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ") + "_" + uuid4().hex[:8]
-        run_dir = Path(config.output_dir).resolve() / run_id
+        display_run_dir = Path(config.output_dir).resolve() / run_id
+        run_dir = _output_path(display_run_dir)
         run_dir.mkdir(parents=True, exist_ok=False)
         metadata = {
             "schema_version": 1, "status": "running", "run_id": run_id,
@@ -197,7 +209,7 @@ def run_experiment(config: ExperimentConfig) -> Path:
             metadata_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
 
         save_metadata()
-        print(f"Output directory: {run_dir}", flush=True)
+        print(f"Output directory: {display_run_dir}", flush=True)
         effective_workers = min(config.workers, config.participants)
         print(f"Participant workers: {effective_workers}", flush=True)
         completed = {}
