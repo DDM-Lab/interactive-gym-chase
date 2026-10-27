@@ -32,10 +32,43 @@ and do not require activating the environment.
 .\.venv-ai-only\Scripts\python.exe -m run_rl_policies.chapt2_collect_AI_human_speed
 ```
 
-Defaults: 5 simulated participants, 20 episodes each, 1,350 steps per episode,
+CLI defaults: 100 simulated participants, 20 episodes each, 1,350 steps per episode,
 base seed 42, headless. Both agents actually act every 5 steps and are told
-their frame skip is 1. The default output directory is `<repository>/data/ai_only`.
+their frame skip is 1. The CLI saves to this local Google Drive folder by default:
+
+```text
+G:\.shortcut-targets-by-id\1zFPkx_p8sPRshZUcZ95mHkYUPR3dh1-i\2025GraceRoessling\2025ControllableCollaborationChaseGrace\Experiments\2026-ControllableCollaboration-Temporal-Allignment\Data\Temporally Aligned Agent, AI-only condition
+```
+
+Override it with `--output-dir` to save elsewhere. Direct Python use of
+`ExperimentConfig` still defaults to `<repository>/data/ai_only`.
 There is no Flask server, browser, human player, or real-time pacing.
+
+To run participants concurrently, add `--workers`:
+
+```powershell
+.\.venv-ai-only\Scripts\python.exe -m run_rl_policies.chapt2_collect_AI_human_speed --participants 100 --episodes 20 --workers 4
+```
+
+`--workers` is a positive integer and defaults to 16. Use `--workers 1` for
+sequential execution. Direct Python use of `ExperimentConfig` defaults to 1.
+The effective worker count is capped at the number of participants. Each process
+loads its own model and environment once, then processes whole participant
+sessions. Episodes within a participant remain sequential. Start with 2 or 4
+workers and compare elapsed time for your workload; spawning processes adds
+overhead, so very small runs may be faster with one worker.
+
+Seeds and non-timing CSV values are unchanged by worker count. Each participant
+has its own gameplay CSV; only the parent process writes metadata and the shared
+episode summary. Progress can appear out of participant order, but final summary
+rows are sorted by participant and episode. Metadata records the requested and
+effective worker counts. On an error, pending tasks are cancelled and running
+tasks stop at an episode boundary before the run is marked failed. A keyboard
+interrupt marks it interrupted; already written data is retained.
+
+When calling `run_experiment` from another Python script with multiple workers,
+put that call inside `if __name__ == "__main__":` so spawned processes can import
+the script safely. The provided module entry point already has this guard.
 
 A small check with unequal agent speeds:
 
@@ -51,10 +84,11 @@ its values must be 1, 5, 10, or 15. These settings remain independent and are
 restored on every reset. Actual cadence is applied only by the runner; the
 shared environment adapter disables its own additional action masking.
 
-Other options: `--participants`, `--episodes`, `--max-steps`, `--seed`,
+Other options: `--participants`, `--episodes`, `--max-steps`, `--workers`, `--seed`,
 `--output-dir`, `--model-path`, and `--fps`. Paths supplied by the user are
-relative to the current directory; default model and output paths are relative
-to the repository. `--fps` defaults to 30 and only converts steps to nominal
+relative to the current directory. The default model path is relative to the
+repository, and the CLI's default output path is the absolute Google Drive path
+above. `--fps` defaults to 30 and only converts steps to nominal
 simulated seconds. It never changes the environment dynamics or sleeps.
 Run the module from the repository root, or put the repository on `PYTHONPATH`.
 
@@ -113,3 +147,5 @@ synchronous runner matches intended cadence, not exact browser action timing.
 The tests use the real model/environment to check inference, independent cadence,
 reported one-hots across resets and steps, deterministic trajectories, episode
 outputs, and existing component-reward behavior.
+They also compare sequential and parallel trajectories, verify worker reuse and
+worker-count limits, and exercise an actual spawned-worker failure.

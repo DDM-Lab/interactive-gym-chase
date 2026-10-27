@@ -1,13 +1,18 @@
 """Participant/episode orchestration, output ownership, and run provenance."""
 
 import csv
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
 from importlib.metadata import distributions
 import json
+import multiprocessing
+from multiprocessing.util import Finalize
 from pathlib import Path
 import platform
+from queue import Empty
+from threading import Thread
 import subprocess
 import sys
 from uuid import uuid4
@@ -28,9 +33,10 @@ class ExperimentConfig:
     fps: int = 30
     output_dir: Path = ROOT / "data/ai_only"
     model_path: Path = DEFAULT_MODEL
+    workers: int = 1
 
     def __post_init__(self):
-        for name in ("participants", "episodes", "max_steps", "fps"):
+        for name in ("participants", "episodes", "max_steps", "fps", "workers"):
             if not isinstance(getattr(self, name), int) or getattr(self, name) < 1:
                 raise ValueError(f"{name} must be a positive integer")
         if len(self.actual_frame_skips) != 2 or any(
@@ -57,6 +63,90 @@ def _git(*args):
 
 def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _run_participant(config, participant, run_dir, env, policy, report, stop=None):
+    """Own exactly one participant's CSV; never write shared run outputs."""
+    player = GamePlayer(env, policy, config.actual_frame_skips, config.reported_frame_skips, config.fps)
+    filename = f"cramped_room_{participant}_agent0_frame_skip_agent1_frame_skip_game_data.csv"
+    summaries = []
+    with (run_dir / filename).open("x", newline="", encoding="utf-8") as data_file:
+        writer = csv.DictWriter(data_file, fieldnames=None)
+        for episode in range(config.episodes):
+            if stop is not None and stop.is_set():
+                break
+            seed = config.seed + participant * config.episodes + episode
+            summary = player.run_episode(participant, episode, seed, writer)
+            data_file.flush()
+            summaries.append(summary)
+            report(summary)
+    return summaries
+
+
+_WORKER = None
+
+
+def _initialize_worker(config, progress, stop):
+    # ONNX sessions and CoGrid environments are process-local, never pickled.
+    global _WORKER
+    policy = ONNXPolicy(config.model_path)
+    env = make_environment(config.reported_frame_skips, config.max_steps)
+    Finalize(None, env.close, exitpriority=10)
+    _WORKER = (config, env, policy, progress, stop)
+
+
+def _participant_worker(participant, run_dir):
+    config, env, policy, progress, stop = _WORKER
+    return _run_participant(config, participant, run_dir, env, policy, progress.put, stop)
+
+
+def _run_parallel(config, run_dir, report):
+    # Explicit spawn also exercises Windows behavior on other platforms.
+    context = multiprocessing.get_context("spawn")
+    progress = context.Queue()
+    stop = context.Event()
+    pool = None
+
+    def drain_progress():
+        while True:
+            try:
+                summary = progress.get_nowait()
+            except Empty:
+                return
+            report(summary)
+
+    try:
+        pool = ProcessPoolExecutor(
+            max_workers=min(config.workers, config.participants), mp_context=context,
+            initializer=_initialize_worker, initargs=(config, progress, stop),
+        )
+        pending = {pool.submit(_participant_worker, p, run_dir) for p in range(config.participants)}
+        while pending:
+            done, pending = wait(pending, timeout=0.1, return_when=FIRST_COMPLETED)
+            drain_progress()
+            for future in done:
+                # Results provide authoritative delivery even if the queue's
+                # background feeder has not delivered the last progress message.
+                for summary in future.result():
+                    report(summary)
+    finally:
+        stop.set()
+        if pool is not None:
+            # Running tasks stop at the next episode boundary; queued tasks cancel.
+            # Drain while workers exit so queue feeders cannot block shutdown.
+            shutdown = Thread(target=pool.shutdown, kwargs={"wait": True, "cancel_futures": True})
+            shutdown.start()
+            try:
+                while shutdown.is_alive():
+                    drain_progress()
+                    shutdown.join(timeout=0.1)
+            finally:
+                shutdown.join()
+        try:
+            drain_progress()
+        finally:
+            progress.close()
+            progress.join_thread()
 
 
 def run_experiment(config: ExperimentConfig) -> Path:
@@ -96,6 +186,10 @@ def run_experiment(config: ExperimentConfig) -> Path:
             "timing": "synchronous; decisions at zero-based steps 0, k, 2k; no-ops between decisions",
             "episode_numbering": "zero-based; CSV step is one-based after transition",
             "completed_episodes": 0,
+            "execution": {
+                "mode": "process_pool" if min(config.workers, config.participants) > 1 else "sequential",
+                "effective_workers": min(config.workers, config.participants),
+            },
         }
         metadata_path = run_dir / "metadata.json"
 
@@ -104,31 +198,45 @@ def run_experiment(config: ExperimentConfig) -> Path:
 
         save_metadata()
         print(f"Output directory: {run_dir}", flush=True)
-        player = GamePlayer(env, policy, config.actual_frame_skips, config.reported_frame_skips, config.fps)
+        effective_workers = min(config.workers, config.participants)
+        print(f"Participant workers: {effective_workers}", flush=True)
+        completed = {}
         try:
             with (run_dir / "episode_summary.csv").open("x", newline="", encoding="utf-8") as summary_file:
                 summary_writer = csv.DictWriter(summary_file, fieldnames=None)
-                for participant in range(config.participants):
-                    filename = f"cramped_room_{participant}_agent0_frame_skip_agent1_frame_skip_game_data.csv"
-                    with (run_dir / filename).open("x", newline="", encoding="utf-8") as data_file:
-                        writer = csv.DictWriter(data_file, fieldnames=None)
-                        for episode in range(config.episodes):
-                            seed = config.seed + participant * config.episodes + episode
-                            summary = player.run_episode(participant, episode, seed, writer)
-                            if summary_writer.fieldnames is None:
-                                summary_writer.fieldnames = list(summary)
-                                summary_writer.writeheader()
-                            summary_writer.writerow(summary)
-                            data_file.flush()
-                            summary_file.flush()
-                            metadata["completed_episodes"] += 1
-                            save_metadata()
-                            print(
-                                f"Participant {participant + 1}/{config.participants}, "
-                                f"episode {episode + 1}/{config.episodes}: "
-                                f"reward={summary['team_reward']:g}, steps={summary['steps']}",
-                                flush=True,
-                            )
+
+                def report(summary):
+                    key = (summary["participant"], summary["episode"])
+                    if key in completed:
+                        return
+                    completed[key] = summary
+                    if summary_writer.fieldnames is None:
+                        summary_writer.fieldnames = list(summary)
+                        summary_writer.writeheader()
+                    summary_writer.writerow(summary)
+                    summary_file.flush()
+                    metadata["completed_episodes"] = len(completed)
+                    save_metadata()
+                    print(
+                        f"Participant {key[0] + 1}/{config.participants}, "
+                        f"episode {key[1] + 1}/{config.episodes}: "
+                        f"reward={summary['team_reward']:g}, steps={summary['steps']}",
+                        flush=True,
+                    )
+
+                try:
+                    if effective_workers > 1:
+                        _run_parallel(config, run_dir, report)
+                    else:
+                        for participant in range(config.participants):
+                            _run_participant(config, participant, run_dir, env, policy, report)
+                finally:
+                    # Keep a deterministic row order even when workers finish out of order.
+                    if completed:
+                        summary_file.seek(0)
+                        summary_file.truncate()
+                        summary_writer.writeheader()
+                        summary_writer.writerows(completed[key] for key in sorted(completed))
             metadata["status"] = "complete"
         except BaseException as error:
             metadata["status"] = "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"

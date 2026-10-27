@@ -1,15 +1,18 @@
 """Integration checks with the real shipped model and CoGrid 0.3.2 environment."""
 
 import csv
+from dataclasses import replace
 import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
 from run_rl_policies.environment import make_environment
+from run_rl_policies import experiment
 from run_rl_policies.experiment import ExperimentConfig, run_experiment
 from run_rl_policies.game_player import GamePlayer
 from run_rl_policies.onnx_policy import ONNXPolicy
@@ -113,9 +116,72 @@ class AIOnlyTests(unittest.TestCase):
             {"participants": 0}, {"episodes": 0}, {"max_steps": 0},
             {"actual_frame_skips": (0, 5)}, {"reported_frame_skips": (2, 5)},
             {"seed": -1}, {"seed": 2**32 - 1},
+            {"workers": 0}, {"workers": -1},
         ):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 ExperimentConfig(**kwargs)
+
+    def test_parallel_matches_sequential_with_worker_reuse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = ExperimentConfig(
+                participants=3, episodes=2, max_steps=150,
+                actual_frame_skips=(2, 5), reported_frame_skips=(5, 10),
+                output_dir=Path(tmp),
+            )
+            sequential = run_experiment(config)
+            parallel = run_experiment(replace(config, workers=2))
+
+            def read_csv(path, ignored):
+                with path.open(newline="", encoding="utf-8") as file:
+                    return [{k: v for k, v in row.items() if k not in ignored}
+                            for row in csv.DictReader(file)]
+
+            for participant in range(3):
+                pattern = f"cramped_room_{participant}_*game_data.csv"
+                ignored = {"timestamp", "episode_elapsed_time"}
+                self.assertEqual(
+                    read_csv(next(sequential.glob(pattern)), ignored),
+                    read_csv(next(parallel.glob(pattern)), ignored),
+                )
+            self.assertEqual(
+                read_csv(sequential / "episode_summary.csv", {"wall_clock_seconds"}),
+                read_csv(parallel / "episode_summary.csv", {"wall_clock_seconds"}),
+            )
+            metadata = json.loads((parallel / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["status"], "complete")
+            self.assertEqual(metadata["completed_episodes"], 6)
+            self.assertEqual(metadata["execution"], {"mode": "process_pool", "effective_workers": 2})
+
+    def test_extra_workers_are_capped_at_participant_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = run_experiment(ExperimentConfig(
+                participants=1, episodes=1, max_steps=5, workers=8, output_dir=Path(tmp),
+            ))
+            metadata = json.loads((run / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["execution"], {"mode": "sequential", "effective_workers": 1})
+
+    def test_worker_error_marks_run_failed_and_preserves_existing_file(self):
+        run_parallel = experiment._run_parallel
+
+        def introduce_collision(config, run_dir, report):
+            # A genuine exception in a spawned worker, rather than a parent-only mock.
+            path = run_dir / "cramped_room_0_agent0_frame_skip_agent1_frame_skip_game_data.csv"
+            path.write_text("existing data", encoding="utf-8")
+            return run_parallel(config, run_dir, report)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = ExperimentConfig(
+                participants=3, episodes=2, max_steps=10, workers=2, output_dir=Path(tmp),
+            )
+            with patch.object(experiment, "_run_parallel", side_effect=introduce_collision):
+                with self.assertRaises(FileExistsError):
+                    run_experiment(config)
+            run = next(Path(tmp).iterdir())
+            metadata = json.loads((run / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["status"], "failed")
+            self.assertIn("FileExistsError", metadata["error"])
+            path = next(run.glob("cramped_room_0_*game_data.csv"))
+            self.assertEqual(path.read_text(encoding="utf-8"), "existing data")
 
 
 if __name__ == "__main__":
