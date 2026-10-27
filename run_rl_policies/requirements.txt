@@ -1,0 +1,5 @@
+# Install in a separate environment from the repository's legacy requirements.
+cogrid==0.3.2
+gymnasium==1.3.0
+numpy==2.2.6
+onnxruntime==1.23.1
